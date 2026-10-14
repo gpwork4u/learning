@@ -60,12 +60,33 @@
   .arith-eq { font: 500 .86rem/1.6 var(--f-mono); margin: 0; }
   .arith-eq .q { color: var(--data-q); } .arith-eq .k { color: var(--data-k); } .arith-eq .v { color: var(--data-v); }
 
-  /* FIG 2.3 位置編碼 */
+  /* FIG 2.4 位置編碼 */
   .pe-cell { stroke: none; }
   .pe-hi { fill: none; stroke: var(--rule-strong); stroke-width: 2; transition: y var(--dur-2) var(--ease-out); pointer-events: none; }
   .pe-bar { transition: y var(--dur-3) var(--ease-out), height var(--dur-3) var(--ease-out), fill var(--dur-2) linear; }
   .pe-lab { font: 500 10.5px var(--f-mono); fill: var(--text-muted); dominant-baseline: central; }
   .pe-lab.on { fill: var(--text); font-weight: 700; }
+
+  /* FIG 2.3 向量算術實驗台 */
+  .lab-pt circle.handle-ring { transition: fill var(--dur-1) linear; }
+  .lab-pt text { font: 500 14px var(--f-body); fill: var(--text); dominant-baseline: central; paint-order: stroke; stroke: var(--surface-raised); stroke-width: 4px; stroke-linejoin: round; pointer-events: none; }
+  .lab-pt.role-a circle { fill: var(--data-q); stroke: var(--data-q); }
+  .lab-pt.role-b circle { fill: var(--data-k); stroke: var(--data-k); }
+  .lab-pt.role-c circle { fill: var(--data-v); stroke: var(--data-v); }
+  .lab-pt.role-t circle { fill: var(--accent); stroke: var(--accent); }
+  .lab-pt.role-t text { font-weight: 700; }
+  .lab-pt.moved text { text-decoration: underline dotted; }
+  .lab-eq { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s-2); margin: var(--s-1) 0 var(--s-3); font: 600 .95rem var(--f-mono); }
+  .lab-eq label { display: grid; gap: 2px; }
+  .lab-eq label > span { font: 600 .62rem/1 var(--f-mono); letter-spacing: .1em; }
+  .lab-sel { appearance: none; min-height: 34px; padding: 0 var(--s-5) 0 var(--s-2); border: 1px solid var(--rule); border-bottom: 2px solid var(--c, var(--rule-strong)); border-radius: 0; background-color: var(--surface-page); background-image: linear-gradient(45deg, transparent 50%, var(--text-muted) 50%), linear-gradient(135deg, var(--text-muted) 50%, transparent 50%); background-repeat: no-repeat; background-size: 5px 5px; background-position: right 13px center, right 8px center; font: 500 .92rem var(--f-body); color: var(--text); cursor: pointer; }
+  .lab-sel:focus-visible { outline: 2px solid var(--focus); outline-offset: 1px; }
+  .lab-goals { list-style: none; margin: var(--s-2) 0 0; padding: 0; display: grid; gap: 6px; }
+  .lab-goals li { display: grid; grid-template-columns: 1.4em 1fr; gap: var(--s-2); font-size: .84rem; color: var(--text-muted); line-height: 1.5; }
+  .lab-goals li::before { content: "○"; font-family: var(--f-mono); color: var(--text-faint); }
+  .lab-goals li.done { color: var(--text); }
+  .lab-goals li.done::before { content: "✓"; color: var(--accent); font-weight: 700; }
+  #fig-2-3 .stage-scroll > svg { min-width: 460px; }
 
   .jump-btn { margin: 0 0 var(--s-4); }
   #fig-2-2 .stage-scroll > svg { min-width: 460px; }
@@ -101,7 +122,8 @@
       <p class="chapter-deck">token ID 只是字典裡的編號，本身沒有意義。這一章看模型如何把編號「查表」換成一串數字，讓意思相近的詞在空間中彼此靠近，再替每個位置蓋上座標章。</p>
       <ul class="chapter-meta">
         <li>閱讀 <b>11 分鐘</b></li>
-        <li>互動圖版 <b>3</b></li>
+        <li>互動圖版 <b>4</b></li>
+        <li>動手實驗 <b>1</b></li>
         <li>先備 <b>第 01 章 分詞</b></li>
       </ul>
     </div>
@@ -228,6 +250,57 @@
         <p>現代 LLM 的嵌入不一定像 word2vec 那樣有乾淨的線性關係，而且 token 常是半個詞或一個字。但「相近意義 → 相近向量」的直覺依然成立，後續的注意力層會在這個基礎上依上下文再加工。</p>
       </div>
 
+      <p>這個類比能成立，靠的是兩段關係在空間裡<strong>剛好平行、長度也相近</strong>。下面的實驗台讓你自己組算式，也可以直接拖動地圖上的詞，看看幾何一變，類比會不會跟著瓦解。</p>
+
+      <figure class="plate is-lab" id="fig-2-3" tabindex="-1">
+        <div class="plate-head">
+          <span class="plate-fig">FIG 2.3<span class="lab-tag">動手做</span></span>
+          <h3 class="plate-title">向量算術實驗台：自己組 A − B + C</h3>
+          <span class="plate-hint">選單 / 拖曳 / 方向鍵</span>
+        </div>
+        <div class="lab-task"><p>找出另一組能成立的類比；再試著拖動一個詞，讓「國王 − 男人 + 女人」不再落在「女王」。</p></div>
+        <div class="plate-stage">
+          <div class="stage-split">
+            <div>
+              <div class="stage-scroll"><svg class="stage-svg" id="lab-svg" viewBox="0 0 640 440" role="group" aria-label="向量算術實驗地圖：每個詞都可拖曳，或聚焦後用方向鍵移動"></svg></div>
+              <p class="scroll-hint">← 可橫向捲動 →</p>
+            </div>
+            <div class="readout">
+              <p class="meta-label">算式</p>
+              <div class="lab-eq">
+                <label style="--c:var(--data-q)"><span style="color:var(--data-q)">A</span><select class="lab-sel" id="lab-a" aria-label="A：起點的詞"></select></label>
+                <span aria-hidden="true">−</span>
+                <label style="--c:var(--data-k)"><span style="color:var(--data-k)">B</span><select class="lab-sel" id="lab-b" aria-label="B：要減去的詞"></select></label>
+                <span aria-hidden="true">+</span>
+                <label style="--c:var(--data-v)"><span style="color:var(--data-v)">C</span><select class="lab-sel" id="lab-c" aria-label="C：要加上的詞"></select></label>
+              </div>
+              <dl>
+                <dt>落點座標</dt><dd id="lab-xy">—</dd>
+                <dt>關係夾角</dt><dd><span id="lab-ang">0</span>°</dd>
+              </dl>
+              <p class="meta-label" style="margin-top:var(--s-3)">離落點最近（排除 A、B、C）</p>
+              <ul class="near-list" id="lab-near"></ul>
+              <p class="meta-label" style="margin-top:var(--s-4)">任務進度</p>
+              <ul class="lab-goals">
+                <li id="lab-goal-1">另一組成立的類比（同群關係、落點距離 &lt; 1.0）</li>
+                <li id="lab-goal-2">拖動詞，讓「國王 − 男人 + 女人」不再 ≈ 女王</li>
+              </ul>
+            </div>
+          </div>
+        </div>
+        <div class="plate-controls">
+          <span class="meta-label">範例</span>
+          <button class="btn btn-ghost btn-sm" type="button" data-lab="國王,男人,女人">國王 − 男人 + 女人</button>
+          <button class="btn btn-ghost btn-sm" type="button" data-lab="女王,女人,男人">女王 − 女人 + 男人</button>
+          <button class="btn btn-ghost btn-sm" type="button" data-lab="王子,男人,女人">王子 − 男人 + 女人</button>
+          <button class="btn btn-ghost btn-sm" type="button" data-lab="貓,蘋果,日本">貓 − 蘋果 + 日本</button>
+          <span class="spacer"></span>
+          <button class="btn btn-sm" type="button" id="lab-reset">還原座標</button>
+        </div>
+        <p class="plate-narr" id="lab-narr"></p>
+        <p class="plate-cap">「關係夾角」是 B→C 與 A→最近詞 兩段向量的夾角，越接近 0° 代表兩段關係越平行。找最近詞時排除 A、B、C 本身——word2vec 的類比評測也是這樣做，否則落點往往最接近 A 自己。座標為手工擺放的示意值，被拖動過的詞會加上虛線底線。</p>
+      </figure>
+
       <h2 id="position"><span class="sec">§ 2.4</span>位置從哪裡來：位置編碼</h2>
       <p>查表得到的向量只描述「這是哪個 token」，不包含「它在第幾個位置」。下一章的自注意力會把所有 token 一視同仁地兩兩比較——如果不另外提供位置資訊，「狗咬人」和「人咬狗」在模型眼中就是同一袋字。</p>
       <p>原始 Transformer 的做法是替每個位置算出一個<strong>正弦位置編碼</strong>，直接加到嵌入向量上。不同維度用不同頻率的 sin／cos 波：前面的維度變化快，像時鐘的秒針；後面的維度變化慢，像時針。組合起來，每個位置都得到一組獨一無二的「指紋」。</p>
@@ -237,9 +310,9 @@
         <span class="cmt">// 模型實際的輸入：x = E[id] + PE(pos)</span>
       </div>
 
-      <figure class="plate" id="fig-2-3" tabindex="-1">
+      <figure class="plate" id="fig-2-4" tabindex="-1">
         <div class="plate-head">
-          <span class="plate-fig">FIG 2.3</span>
+          <span class="plate-fig">FIG 2.4</span>
           <h3 class="plate-title">正弦位置編碼：拖動滑桿選擇位置</h3>
           <span class="plate-hint">拖動 / 滑過列</span>
         </div>
@@ -424,6 +497,15 @@
     });
   })();
 
+  /* FIG 2.2 與 FIG 2.3 共用的示意座標（二維語意地圖） */
+  var MAP_WORDS = [
+    { w: "國王", x: 6, y: 6.5 }, { w: "女王", x: 6.7, y: 2.6 }, { w: "男人", x: 1, y: 4 }, { w: "女人", x: 1.5, y: 0.3 },
+    { w: "王子", x: 4.2, y: 7.7 }, { w: "公主", x: 4.4, y: 1.0 }, { w: "男孩", x: -0.9, y: 5.3 }, { w: "女孩", x: -0.4, y: 1.4 },
+    { w: "貓", x: -7, y: 6 }, { w: "狗", x: -5.8, y: 7.3 }, { w: "老虎", x: -8.4, y: 4.6 }, { w: "獅子", x: -7.4, y: 3.4 },
+    { w: "蘋果", x: -5.6, y: -4.6 }, { w: "香蕉", x: -7.6, y: -6.2 }, { w: "葡萄", x: -4.8, y: -7.0 }, { w: "西瓜", x: -8.2, y: -4.0 },
+    { w: "台灣", x: 4.8, y: -4.8 }, { w: "日本", x: 6.9, y: -5.8 }, { w: "法國", x: 7.6, y: -3.6 }, { w: "巴西", x: 5.4, y: -7.6 }
+  ];
+
   /* =========================================================
      FIG 2.2 — 二維語意地圖
      ========================================================= */
@@ -433,13 +515,7 @@
     var U = 22, OX0 = 320, OY0 = 220;
     function X(x) { return OX0 + x * U; }
     function Y(y) { return OY0 - y * U; }
-    var WORDS = [
-      { w: "國王", x: 6, y: 6.5 }, { w: "女王", x: 6.7, y: 2.6 }, { w: "男人", x: 1, y: 4 }, { w: "女人", x: 1.5, y: 0.3 },
-      { w: "王子", x: 4.2, y: 7.7 }, { w: "公主", x: 4.4, y: 1.0 }, { w: "男孩", x: -0.9, y: 5.3 }, { w: "女孩", x: -0.4, y: 1.4 },
-      { w: "貓", x: -7, y: 6 }, { w: "狗", x: -5.8, y: 7.3 }, { w: "老虎", x: -8.4, y: 4.6 }, { w: "獅子", x: -7.4, y: 3.4 },
-      { w: "蘋果", x: -5.6, y: -4.6 }, { w: "香蕉", x: -7.6, y: -6.2 }, { w: "葡萄", x: -4.8, y: -7.0 }, { w: "西瓜", x: -8.2, y: -4.0 },
-      { w: "台灣", x: 4.8, y: -4.8 }, { w: "日本", x: 6.9, y: -5.8 }, { w: "法國", x: 7.6, y: -3.6 }, { w: "巴西", x: 5.4, y: -7.6 }
-    ];
+    var WORDS = MAP_WORDS;
     function idx(w) { for (var i = 0; i < WORDS.length; i++) if (WORDS[i].w === w) return i; return -1; }
 
     // 軸與群組標籤
@@ -610,7 +686,202 @@
   });
 
   /* =========================================================
-     FIG 2.3 — 正弦位置編碼
+     FIG 2.3 — 向量算術實驗台（動手做）
+     ========================================================= */
+  (function arithLab() {
+    var svg = document.getElementById("lab-svg"), plate = document.getElementById("fig-2-3");
+    var narr = document.getElementById("lab-narr");
+    var U = 22, OX0 = 320, OY0 = 220, LIM = 9.5;
+    function X(x) { return OX0 + x * U; }
+    function Y(y) { return OY0 - y * U; }
+    function fresh() { return MAP_WORDS.map(function (o) { return { w: o.w, x: o.x, y: o.y }; }); }
+    var WD = fresh();
+    function idx(w) { for (var i = 0; i < WD.length; i++) if (WD[i].w === w) return i; return -1; }
+    var A = idx("國王"), B = idx("男人"), C = idx("女人");
+    var goals = { other: false, broke: false };
+
+    S("line", { class: "map-axis", x1: X(-10), x2: X(10), y1: OY0, y2: OY0 }, svg);
+    S("line", { class: "map-axis", x1: OX0, x2: OX0, y1: Y(9.4), y2: Y(-9.4) }, svg);
+    S("circle", { cx: OX0, cy: OY0, r: 3, fill: "var(--text-muted)" }, svg);
+    [["動物", -7, 8.8], ["人物", 2.8, 9.0], ["水果", -6.4, -8.8], ["國家", 6.3, -9.2]].forEach(function (c) {
+      S("text", { class: "map-clu", x: X(c[1]), y: Y(c[2]), text: c[0] }, svg);
+    });
+
+    var gGeo = S("g", {}, svg), gPts = S("g", {}, svg);
+    var parBC = S("path", { class: "map-par" }, gGeo), parAT = S("path", { class: "map-par" }, gGeo);
+
+    function arrow(color) {
+      var g = S("g", {}, gGeo);
+      var line = S("path", { fill: "none", stroke: color, "stroke-width": 2.4, "stroke-linecap": "round" }, g);
+      var head = S("path", { fill: color }, g);
+      return function (x1, y1, x2, y2, delay) {
+        var dx = x2 - x1, dy = y2 - y1, L = Math.hypot(dx, dy) || 1, ux = dx / L, uy = dy / L;
+        var ex = x2 - ux * 9, ey = y2 - uy * 9;
+        line.setAttribute("d", "M" + x1.toFixed(1) + " " + y1.toFixed(1) + " L " + ex.toFixed(1) + " " + ey.toFixed(1));
+        head.setAttribute("d", "M" + x2.toFixed(1) + " " + y2.toFixed(1) + " L " + (ex - uy * 5).toFixed(1) + " " + (ey + ux * 5).toFixed(1) + " L " + (ex + uy * 5).toFixed(1) + " " + (ey - ux * 5).toFixed(1) + " Z");
+        if (delay == null || FL.reducedMotion()) {
+          line.style.transition = "none"; line.style.strokeDasharray = "none"; line.style.strokeDashoffset = "0";
+          head.style.transition = "none"; head.style.opacity = 1;
+          return;
+        }
+        var len = Math.ceil(line.getTotalLength()) + 1;
+        line.style.transition = "none"; line.style.strokeDasharray = len; line.style.strokeDashoffset = len;
+        head.style.transition = "none"; head.style.opacity = 0;
+        line.getBoundingClientRect();
+        timers.push(setTimeout(function () {
+          line.style.transition = "stroke-dashoffset 450ms var(--ease-out)"; line.style.strokeDashoffset = "0";
+          head.style.transition = "opacity 140ms linear 380ms"; head.style.opacity = 1;
+        }, delay));
+      };
+    }
+    var timers = [];
+    var arA = arrow("var(--data-q)"), arB = arrow("var(--data-k)"), arC = arrow("var(--data-v)");
+    var ring = S("circle", { class: "map-ring", r: 15 }, gGeo);
+    var resDot = S("circle", { r: 4, fill: "var(--accent)" }, gGeo);
+
+    var pts = WD.map(function (wd, i) {
+      var g = S("g", { class: "lab-pt", role: "button" }, gPts);
+      var c = S("circle", { class: "handle-ring", r: 6 }, g);
+      var t = S("text", {}, g);
+      FL.drag(svg, g, {
+        onMove: function (pt) {
+          WD[i].x = FL.clamp((pt.x - OX0) / U, -LIM, LIM);
+          WD[i].y = FL.clamp((OY0 - pt.y) / U, -LIM, LIM);
+          update(false);
+        },
+        onKey: function (dx, dy) {
+          WD[i].x = FL.clamp(WD[i].x + dx * 0.1, -LIM, LIM);
+          WD[i].y = FL.clamp(WD[i].y - dy * 0.1, -LIM, LIM);
+          update(false);
+        }
+      });
+      return { g: g, c: c, t: t };
+    });
+
+    // 選單
+    var sels = [document.getElementById("lab-a"), document.getElementById("lab-b"), document.getElementById("lab-c")];
+    sels.forEach(function (sel) {
+      WD.forEach(function (wd, i) { FL.el("option", { value: i, text: wd.w }, sel); });
+      sel.addEventListener("change", function () {
+        A = +sels[0].value; B = +sels[1].value; C = +sels[2].value;
+        update(true);
+      });
+    });
+
+    var elXY = document.getElementById("lab-xy"), elAng = document.getElementById("lab-ang"), nearList = document.getElementById("lab-near");
+    var g1 = document.getElementById("lab-goal-1"), g2 = document.getElementById("lab-goal-2");
+
+    function angleDeg(u, v) {
+      var nu = Math.hypot(u.x, u.y), nv = Math.hypot(v.x, v.y);
+      if (nu < 1e-6 || nv < 1e-6) return 0;
+      return Math.acos(FL.clamp((u.x * v.x + u.y * v.y) / (nu * nv), -1, 1)) * 180 / Math.PI;
+    }
+    function isDefault(i) { return WD[i].x === MAP_WORDS[i].x && WD[i].y === MAP_WORDS[i].y; }
+    // 語意群：MAP_WORDS 依序每 8/4/4/4 個一群
+    var CLU = ["人物", "人物", "人物", "人物", "人物", "人物", "人物", "人物", "動物", "動物", "動物", "動物", "水果", "水果", "水果", "水果", "國家", "國家", "國家", "國家"];
+
+    function update(animate) {
+      timers.forEach(clearTimeout); timers = [];
+      var a = WD[A], b = WD[B], c = WD[C];
+      var p1 = { x: a.x - b.x, y: a.y - b.y }, r = { x: p1.x + c.x, y: p1.y + c.y };
+      var near = WD.map(function (wd, i) { return { i: i, w: wd.w, d: Math.hypot(wd.x - r.x, wd.y - r.y) }; })
+        .filter(function (o) { return o.i !== A && o.i !== B && o.i !== C; })
+        .sort(function (m, n) { return m.d - n.d; }).slice(0, 3);
+      var T = near[0], tw = WD[T.i];
+      var rel = { x: c.x - b.x, y: c.y - b.y }, relT = { x: tw.x - a.x, y: tw.y - a.y };
+      var ang = angleDeg(rel, relT);
+
+      // 點
+      pts.forEach(function (p, i) {
+        var wd = WD[i];
+        p.c.setAttribute("cx", X(wd.x)); p.c.setAttribute("cy", Y(wd.y));
+        p.t.setAttribute("x", X(wd.x) + 10); p.t.setAttribute("y", Y(wd.y)); p.t.textContent = wd.w;
+        p.g.classList.toggle("role-a", i === A);
+        p.g.classList.toggle("role-b", i === B && i !== A);
+        p.g.classList.toggle("role-c", i === C && i !== A && i !== B);
+        p.g.classList.toggle("role-t", i === T.i);
+        p.g.classList.toggle("moved", !isDefault(i));
+        p.g.setAttribute("aria-label", "「" + wd.w + "」座標 (" + wd.x.toFixed(1) + ", " + wd.y.toFixed(1) + ")，可拖曳或用方向鍵移動");
+      });
+
+      // 箭頭：原點 → A → A−B → A−B+C
+      var d0 = animate ? 0 : null, d1 = animate ? 380 : null, d2 = animate ? 760 : null;
+      arA(OX0, OY0, X(a.x), Y(a.y), d0);
+      arB(X(a.x), Y(a.y), X(p1.x), Y(p1.y), d1);
+      arC(X(p1.x), Y(p1.y), X(r.x), Y(r.y), d2);
+      [ring, resDot].forEach(function (el) { el.setAttribute("cx", X(r.x)); el.setAttribute("cy", Y(r.y)); });
+      ring.style.transition = "none"; ring.style.opacity = animate && !FL.reducedMotion() ? 0 : 1;
+      if (animate) timers.push(setTimeout(function () { ring.style.transition = ""; ring.style.opacity = 1; }, 1150));
+      parBC.setAttribute("d", "M" + X(b.x) + " " + Y(b.y) + " L " + X(c.x) + " " + Y(c.y));
+      parAT.setAttribute("d", "M" + X(a.x) + " " + Y(a.y) + " L " + X(tw.x) + " " + Y(tw.y));
+
+      // 讀數
+      sels[0].value = A; sels[1].value = B; sels[2].value = C;
+      elXY.textContent = "(" + r.x.toFixed(1) + ", " + r.y.toFixed(1) + ")";
+      FL.ticker(elAng, ang, { digits: 0, instant: !animate });
+      nearList.innerHTML = "";
+      near.forEach(function (o, k) {
+        var li = FL.el("li", { class: k === 0 && o.d < 1 ? "top" : "" }, nearList);
+        FL.el("span", { text: String(k + 1).padStart(2, "0") }, li);
+        FL.el("span", { text: o.w }, li);
+        FL.el("span", { text: "d = " + o.d.toFixed(2) }, li);
+      });
+
+      // 說明
+      var eq = a.w + " − " + b.w + " + " + c.w;
+      var holds = T.d < 1;
+      var sameRel = CLU[B] === CLU[C];
+      var lb = Math.hypot(rel.x, rel.y), lt = Math.hypot(relT.x, relT.y);
+      var msg;
+      if (B === C) {
+        msg = "B 和 C 是同一個詞，−B 與 +C 互相抵消，落點就是「" + a.w + "」自己（已被排除），所以最近的是「" + T.w + "」。試著讓 B 和 C 不同。";
+      } else if (A === B || A === C) {
+        msg = "A 和 B 或 C 是同一個詞，算式退化成單純的加減一個向量，談不上「類比」。換一組三個不同的詞試試。";
+      } else if (!sameRel) {
+        msg = "「" + b.w + "」（" + CLU[B] + "）和「" + c.w + "」（" + CLU[C] + "）屬於不同語意群，兩者相減得到的不是一種可以轉移的<b>關係</b>。落點最近的是「" + T.w + "」（d = " + T.d.toFixed(2) + "，夾角 " + Math.round(ang) + "°）" +
+          (holds || ang < 25 ? "——幾何上看似對齊，其實只是這張示意圖裡各群剛好排成矩形造成的巧合：<b>幾何上平行不等於語意上類比</b>。" : "，方向也對不上，類比不成立。");
+      } else if (holds) {
+        msg = "<b>" + eq + " ≈ " + T.w + "</b>：落點離「" + T.w + "」只有 " + T.d.toFixed(2) + "。「" + b.w + "→" + c.w + "」與「" + a.w + "→" + T.w + "」夾角 " + Math.round(ang) + "°，" +
+          (ang < 15 ? "幾乎平行——同一種關係在兩組詞之間被重複使用，類比成立。" : "雖不完全平行，長度差異剛好抵銷，落點仍貼近該詞。");
+      } else if (ang < 25) {
+        msg = "方向大致對了（夾角 " + Math.round(ang) + "°），" +
+          (Math.abs(lb - lt) / Math.max(lb, lt) > 0.25
+            ? "但<b>長度不同</b>：「" + b.w + "→" + c.w + "」長 " + lb.toFixed(1) + "，「" + a.w + "→" + T.w + "」長 " + lt.toFixed(1) + "。"
+            : "長度也相近，但落點仍停在詞與詞之間。") +
+          "最近的「" + T.w + "」有 " + T.d.toFixed(2) + " 遠——類比只算「大致」成立。";
+      } else {
+        msg = "落點附近沒有詞：最近的「" + T.w + "」距離 " + T.d.toFixed(2) + "，而「" + b.w + "→" + c.w + "」與「" + a.w + "→" + T.w + "」夾角 " + Math.round(ang) + "°。<b>" + b.w + " 與 " + c.w + " 的差異在「" + a.w + "」附近找不到平行的對應</b>，這組類比不成立。";
+      }
+      narr.innerHTML = msg;
+
+      // 任務
+      var isKMW = WD[A].w === "國王" && WD[B].w === "男人" && WD[C].w === "女人";
+      if (!isKMW && holds && sameRel && A !== B && A !== C && B !== C) goals.other = true;
+      var moved = WD.some(function (wd, i) { return !isDefault(i); });
+      if (isKMW && moved && !(holds && T.w === "女王")) goals.broke = true;
+      g1.classList.toggle("done", goals.other);
+      g2.classList.toggle("done", goals.broke);
+    }
+
+    plate.querySelectorAll("[data-lab]").forEach(function (btn) {
+      btn.addEventListener("click", function () {
+        var w = btn.dataset.lab.split(",");
+        A = idx(w[0]); B = idx(w[1]); C = idx(w[2]);
+        update(true);
+      });
+    });
+    document.getElementById("lab-reset").addEventListener("click", function () {
+      var orig = fresh();
+      WD.forEach(function (wd, i) { wd.x = orig[i].x; wd.y = orig[i].y; });
+      update(true);
+    });
+
+    update(false);
+    FL.inView(plate, function () { update(true); });
+  })();
+
+  /* =========================================================
+     FIG 2.4 — 正弦位置編碼
      ========================================================= */
   (function posEnc() {
     var svg = document.getElementById("pe-svg");

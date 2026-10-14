@@ -127,6 +127,49 @@
     path.style.transition = path.style.strokeDasharray = path.style.strokeDashoffset = "";
   };
 
+  /* ---------- 直接操作 ----------
+     FL.svgPoint(svg, evt)：把指標座標換成 SVG viewBox 座標
+     FL.drag(svg, handle, { onMove(pt, evt), onStart, onEnd, onKey(dx, dy, evt) })
+       - 滑鼠／觸控拖曳 handle，onMove 收到 SVG 座標
+       - handle 需可聚焦；方向鍵呼叫 onKey(dx, dy)，按住 Shift 時 dx/dy 乘以 10 */
+  FL.svgPoint = function (svg, evt) {
+    var pt = svg.createSVGPoint();
+    pt.x = evt.clientX; pt.y = evt.clientY;
+    var m = svg.getScreenCTM();
+    return m ? pt.matrixTransform(m.inverse()) : { x: 0, y: 0 };
+  };
+  FL.drag = function (svg, handle, opts) {
+    var active = false;
+    handle.classList.add("handle");
+    if (!handle.hasAttribute("tabindex")) handle.setAttribute("tabindex", "0");
+    handle.addEventListener("pointerdown", function (e) {
+      active = true;
+      handle.setPointerCapture(e.pointerId);
+      handle.classList.add("is-dragging");
+      if (opts.onStart) opts.onStart(e);
+      opts.onMove(FL.svgPoint(svg, e), e);
+      e.preventDefault();
+    });
+    handle.addEventListener("pointermove", function (e) { if (active) opts.onMove(FL.svgPoint(svg, e), e); });
+    function end(e) {
+      if (!active) return;
+      active = false;
+      handle.classList.remove("is-dragging");
+      if (opts.onEnd) opts.onEnd(e);
+    }
+    handle.addEventListener("pointerup", end);
+    handle.addEventListener("pointercancel", end);
+    handle.addEventListener("keydown", function (e) {
+      if (!opts.onKey) return;
+      var k = { ArrowLeft: [-1, 0], ArrowRight: [1, 0], ArrowUp: [0, -1], ArrowDown: [0, 1] }[e.key];
+      if (!k) return;
+      var f = e.shiftKey ? 10 : 1;
+      opts.onKey(k[0] * f, k[1] * f, e);
+      e.preventDefault();
+      e.stopPropagation();
+    });
+  };
+
   /* ---------- 逐步播放器 ----------
      FL.stepper(plateEl, {
        steps: [{ narr: "HTML 字串" }, ...],
@@ -221,8 +264,10 @@
     var figs = document.querySelector(".rail-figs");
     if (figs) prose.querySelectorAll(".plate[id]").forEach(function (p) {
       var fig = p.querySelector(".plate-fig"), t = p.querySelector(".plate-title");
+      var figNo = fig && fig.firstChild ? fig.firstChild.textContent.trim() : "";
       var li = FL.el("li", {}, figs);
-      FL.el("a", { href: "#" + p.id, text: (fig ? fig.textContent : "") + "  " + (t ? t.textContent : "") }, li);
+      var a = FL.el("a", { href: "#" + p.id, text: figNo + "  " + (t ? t.textContent : "") }, li);
+      if (p.classList.contains("is-lab")) FL.el("span", { class: "rail-lab", text: "動手做" }, a);
     });
 
     if (!("IntersectionObserver" in window)) return;

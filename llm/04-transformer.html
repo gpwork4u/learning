@@ -49,7 +49,34 @@
   .inset-pane { display: grid; gap: var(--s-3); }
   .inset .formula { margin: 0; padding: var(--s-3) var(--s-4); font-size: .86rem; }
 
-  /* FIG 4.2 river */
+  /* FIG 4.2 LayerNorm lab */
+  .ln-axis { stroke: var(--rule-strong); stroke-width: 1; }
+  .ln-grid { stroke: var(--rule); stroke-width: 1; stroke-dasharray: 2 4; }
+  .ln-tick { font: 500 10px var(--f-mono); fill: var(--text-faint); text-anchor: end; dominant-baseline: central; }
+  .ln-title { font: 600 11px var(--f-mono); fill: var(--text-muted); letter-spacing: .08em; }
+  .ln-stat { font: 600 11.5px var(--f-mono); fill: var(--text); font-variant-numeric: tabular-nums; white-space: pre; }
+  .ln-val { font: 500 10px var(--f-mono); fill: var(--text-muted); text-anchor: middle; font-variant-numeric: tabular-nums; }
+  .ln-val.is-out { fill: var(--accent); font-weight: 700; }
+  .ln-bar-x { fill: var(--data-q); }
+  .ln-bar-x.is-out { fill: var(--accent); }
+  .ln-bar-y { fill: var(--data-v); }
+  .ln-ghost { fill: none; stroke: var(--text-muted); stroke-width: 1; stroke-dasharray: 3 3; transition: opacity var(--dur-2) linear; }
+  .ln-band { fill: var(--data-hi-soft); }
+  .ln-mu { stroke: var(--data-hi); stroke-width: 2; }
+  .ln-op rect { fill: var(--surface-page); stroke: var(--rule-strong); }
+  .ln-op text { font: 500 11px var(--f-mono); fill: var(--text); text-anchor: middle; dominant-baseline: central; }
+  .ln-op .ln-op-h { font: 700 12px var(--f-body); }
+  .ln-hit { fill: transparent; }
+  .ln-checks { display: inline-flex; flex-wrap: wrap; gap: var(--s-2); margin-left: var(--s-2); vertical-align: 1px; }
+  .ln-checks span { font: 500 .72rem/1 var(--f-mono); padding: 4px 6px; border: 1px solid var(--rule); color: var(--text-muted); border-radius: var(--radius-1); white-space: nowrap; }
+  .ln-checks span::before { content: "○ "; }
+  .ln-checks span.done { border-color: var(--data-v); color: var(--data-v); }
+  .ln-checks span.done::before { content: "✓ "; }
+  .ln-btns { display: flex; flex-wrap: wrap; gap: var(--s-2); }
+  .ln-fields { display: flex; flex-wrap: wrap; gap: var(--s-3) var(--s-5); }
+  .ln-fields label { text-transform: none; }
+
+  /* FIG 4.3 river */
   .river-stage { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--s-4); }
   .river-stage .feat-list { grid-template-columns: repeat(auto-fill, minmax(min(100%, 280px), 1fr)); gap: 6px var(--s-5); }
   .river-g { transition: clip-path var(--dur-3) var(--ease-out); }
@@ -71,7 +98,7 @@
   .feat-list li.is-sel { color: var(--text); font-weight: 700; }
   .feat-list li.is-off { opacity: .35; }
 
-  /* FIG 4.3 calculator */
+  /* FIG 4.4 calculator */
   .calc { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: var(--s-6); align-items: start; }
   @media (max-width: 820px) { .calc { grid-template-columns: minmax(0, 1fr); } }
   .calc-fields { display: grid; gap: var(--s-4); }
@@ -119,7 +146,8 @@
       <p class="chapter-deck">注意力只是零件之一。這一章把它裝回整台機器：LayerNorm、多頭注意力、前饋網路，以及貫穿全部的殘差流——再看這個區塊如何被複製數十次、堆成一個大型語言模型。</p>
       <ul class="chapter-meta">
         <li>閱讀 <b>14 分鐘</b></li>
-        <li>互動圖版 <b>3</b></li>
+        <li>互動圖版 <b>4</b></li>
+        <li>動手實驗 <b>1</b></li>
         <li>先備 <b>第 03 章 自注意力</b></li>
       </ul>
     </div>
@@ -217,13 +245,42 @@
         <p>原始 Transformer 是 <code>x = LN(x + Sublayer(x))</code>。把 LN 移到子層前面（<code>x = x + Sublayer(LN(x))</code>）後，殘差主幹上完全沒有任何運算擋路，深層網路的梯度能直接流回底層，因此幾乎所有現代 LLM 都採用 pre-norm。</p>
       </div>
 
+      <figure class="plate is-lab" id="fig-4-2" tabindex="-1">
+        <div class="plate-head">
+          <span class="plate-fig">FIG 4.2<span class="lab-tag">動手做</span></span>
+          <h3 class="plate-title">LayerNorm 實驗：拖動輸入向量，看正規化如何反應</h3>
+          <span class="plate-hint">拖曳圓點 / ↑ ↓ 鍵</span>
+        </div>
+        <div class="lab-task"><p>先記下右邊的形狀，再按「全部 +3」與「全部 ×3」——右邊有變嗎？接著拖出一個離群值，看其他維度發生什麼事。<span class="ln-checks" aria-label="任務進度"><span data-chk="shift">平移</span><span data-chk="scale">縮放</span><span data-chk="outlier">離群值</span></span></p></div>
+        <div class="plate-stage">
+          <div class="stage-scroll"><svg class="stage-svg" id="ln-svg" viewBox="0 0 800 380" role="group" aria-label="LayerNorm 實驗：左側 8 維輸入向量可拖曳，右側為正規化後的輸出"></svg></div>
+          <p class="scroll-hint">← 可橫向捲動 →</p>
+        </div>
+        <div class="plate-controls">
+          <div class="ln-btns">
+            <button class="btn btn-sm" type="button" data-ln="shift">全部 +3</button>
+            <button class="btn btn-sm" type="button" data-ln="scale">全部 ×3</button>
+            <button class="btn btn-sm" type="button" data-ln="outlier">加入離群值</button>
+            <button class="btn btn-ghost btn-sm" type="button" data-ln="random">隨機</button>
+            <button class="btn btn-ghost btn-sm" type="button" data-ln="reset">重設</button>
+          </div>
+          <span class="spacer"></span>
+          <div class="ln-fields">
+            <div class="field"><label for="ln-g">γ 縮放</label><input type="range" id="ln-g" min="0.2" max="2" step="0.1" value="1"><output for="ln-g" id="ln-g-out">1.0</output></div>
+            <div class="field"><label for="ln-b">β 平移</label><input type="range" id="ln-b" min="-2" max="2" step="0.1" value="0"><output for="ln-b" id="ln-b-out">0.0</output></div>
+          </div>
+        </div>
+        <p class="plate-narr" id="ln-narr"></p>
+        <p class="plate-cap">左圖為輸入 x（固定刻度 ±10），黃線是平均 μ、黃色區帶是 μ ± σ；右圖為輸出 y = γ·x̂ + β（固定刻度 ±6），γ、β 偏離預設時，虛線框標出原本的 x̂。真實模型的 γ、β 是每一維各自學習的向量，這裡簡化為單一純量。</p>
+      </figure>
+
       <h2 id="residual"><span class="sec">§ 4.2</span>殘差流：模型的共用記事本</h2>
       <p>把殘差流想成一條寬度固定的河。每一層都從河裡<strong>讀</strong>出目前的內容，算完後把一點新資訊<strong>寫</strong>回河裡。沒有任何一層會把河水整個換掉——所以第 1 層寫下的東西，第 40 層仍然讀得到。</p>
       <p>這也解釋了為什麼深層網路訓練得起來：梯度可以沿著「加法」這條捷徑一路傳回最底層，不會在幾十層的非線性中消失。</p>
 
-      <figure class="plate" id="fig-4-2" tabindex="-1">
+      <figure class="plate" id="fig-4-3" tabindex="-1">
         <div class="plate-head">
-          <span class="plate-fig">FIG 4.2</span>
+          <span class="plate-fig">FIG 4.3</span>
           <h3 class="plate-title">「它」這個 token 的殘差流，一層一層被寫入</h3>
           <span class="plate-hint">點擊層 / 拖曳滑桿</span>
         </div>
@@ -266,9 +323,9 @@
       <p>完整的模型其實很單純：<strong>嵌入 → N 個相同結構的區塊 → 最後一次 LayerNorm → unembedding</strong>。最後一步把殘差流上的向量乘以一個 d × V 的矩陣（常和嵌入矩陣共用權重），為詞彙表中每個 token 打一個分數，這組分數就是 <span class="term" title="logits">logits</span>，第 05 章會把它變成機率並取樣。</p>
       <p>參數幾乎都集中在區塊裡：每個區塊的注意力有 W<sub>Q</sub>、W<sub>K</sub>、W<sub>V</sub>、W<sub>O</sub> 四個 d×d 矩陣（4d²），FFN 有兩個 d×4d 矩陣（8d²），合計約 <strong>12d²</strong>。</p>
 
-      <figure class="plate" id="fig-4-3" tabindex="-1">
+      <figure class="plate" id="fig-4-4" tabindex="-1">
         <div class="plate-head">
-          <span class="plate-fig">FIG 4.3</span>
+          <span class="plate-fig">FIG 4.4</span>
           <h3 class="plate-title">參數量估算器：12·N·d² + V·d</h3>
           <span class="plate-hint">拖曳滑桿 / 套用預設</span>
         </div>
@@ -568,10 +625,218 @@
   })();
 
   /* =========================================================
-     FIG 4.2 — 殘差流河道
+     FIG 4.2 — LayerNorm 實驗（動手做）
+     ========================================================= */
+  (function layerNormLab() {
+    var svg = document.getElementById("ln-svg"), plate = document.getElementById("fig-4-2");
+    var narr = document.getElementById("ln-narr");
+    var gIn = document.getElementById("ln-g"), bIn = document.getElementById("ln-b");
+    var gOut = document.getElementById("ln-g-out"), bOut = document.getElementById("ln-b-out");
+    var N = 8, EPS = 1e-5, XMAX = 10, YMAX = 6;
+    var INIT = [1.5, -1, 2, 0.5, -1.8, 1, -0.4, 1.2];
+    var x = INIT.slice(), gamma = 1, beta = 0;
+    var BASE = 196, H = 150;                     // 0 基線與半高（px）
+    var L = { x0: 64, w: 300, k: H / XMAX };       // 左：輸入
+    var R = { x0: 492, w: 300, k: H / YMAX };      // 右：輸出
+    var SLOT = 300 / N, BW = 22;
+
+    function stats(v) {
+      var mu = v.reduce(function (a, b) { return a + b; }, 0) / v.length;
+      var vr = v.reduce(function (a, b) { return a + (b - mu) * (b - mu); }, 0) / v.length;
+      return { mu: mu, sd: Math.sqrt(vr), den: Math.sqrt(vr + EPS) };
+    }
+    function norm(v) { var s = stats(v); return v.map(function (a) { return (a - s.mu) / s.den; }); }
+    function cx(P, i) { return P.x0 + i * SLOT + SLOT / 2; }
+    function yv(P, v) { return BASE - v * P.k; }
+    function r1(v) { return Math.round(v * 10) / 10; }
+
+    /* ---- 靜態骨架：座標軸、刻度、標題、中間的運算方塊 ---- */
+    function axis(P, max, step) {
+      for (var t = -max; t <= max; t += step) {
+        var y = yv(P, t);
+        S("line", { class: t === 0 ? "ln-axis" : "ln-grid", x1: P.x0, x2: P.x0 + P.w, y1: y, y2: y }, svg);
+        S("text", { class: "ln-tick", x: P.x0 - 8, y: y, text: (t > 0 ? "+" : "") + t }, svg);
+      }
+    }
+    axis(L, XMAX, 5);
+    axis(R, YMAX, 2);
+    S("text", { class: "ln-title", x: L.x0, y: 20, text: "輸入 x" }, svg);
+    S("text", { class: "ln-title", x: R.x0, y: 20, text: "輸出 y = γ·x̂ + β" }, svg);
+    var statL = S("text", { class: "ln-stat", x: L.x0 + L.w, y: 20, "text-anchor": "end" }, svg);
+    var statR = S("text", { class: "ln-stat", x: R.x0 + R.w, y: 20, "text-anchor": "end" }, svg);
+
+    var op = S("g", { class: "ln-op" }, svg);
+    S("rect", { x: 380, y: BASE - 46, width: 62, height: 92, rx: 2 }, op);
+    S("text", { class: "ln-op-h", x: 411, y: BASE - 28, text: "LN" }, op);
+    S("text", { x: 411, y: BASE - 6, text: "x − μ" }, op);
+    S("line", { x1: 392, x2: 430, y1: BASE + 6, y2: BASE + 6, stroke: "var(--text)" }, op);
+    S("text", { x: 411, y: BASE + 20, text: "σ" }, op);
+    S("path", { d: "M368 " + BASE + " h12 M442 " + BASE + " h14 l-5 -4 m5 4 l-5 4", fill: "none", stroke: "var(--text-muted)" }, svg);
+
+    /* ---- 動態元素 ---- */
+    var bandL = S("rect", { class: "ln-band", x: L.x0, width: L.w }, svg);
+    var bandR = S("rect", { class: "ln-band", x: R.x0, width: R.w }, svg);
+    var muL = S("line", { class: "ln-mu", x1: L.x0, x2: L.x0 + L.w }, svg);
+    var muR = S("line", { class: "ln-mu", x1: R.x0, x2: R.x0 + R.w }, svg);
+    var gBars = S("g", {}, svg), gHandles = S("g", {}, svg);
+    var barsX = [], barsY = [], ghosts = [], valsX = [], valsY = [], handles = [];
+    for (var i = 0; i < N; i++) {
+      barsX.push(S("rect", { class: "ln-bar-x", x: cx(L, i) - BW / 2, width: BW }, gBars));
+      ghosts.push(S("rect", { class: "ln-ghost", x: cx(R, i) - BW / 2 - 3, width: BW + 6 }, gBars));
+      barsY.push(S("rect", { class: "ln-bar-y", x: cx(R, i) - BW / 2, width: BW }, gBars));
+      valsX.push(S("text", { class: "ln-val", x: cx(L, i), y: BASE + H + 26 }, svg));
+      valsY.push(S("text", { class: "ln-val", x: cx(R, i), y: BASE + H + 26 }, svg));
+      S("text", { class: "ln-val", x: cx(L, i), y: BASE + H + 12, text: "x" + (i + 1), style: "fill:var(--text-faint)" }, svg);
+      S("text", { class: "ln-val", x: cx(R, i), y: BASE + H + 12, text: "y" + (i + 1), style: "fill:var(--text-faint)" }, svg);
+      handles.push(makeHandle(i));
+    }
+
+    function makeHandle(i) {
+      var g = S("g", { class: "ln-handle", role: "slider", "aria-orientation": "vertical", "aria-valuemin": -XMAX, "aria-valuemax": XMAX, "aria-label": "維度 x" + (i + 1) }, gHandles);
+      var hit = S("circle", { class: "ln-hit", r: 16 }, g);
+      var ring = S("circle", { class: "handle-ring", r: 7 }, g);
+      FL.drag(svg, g, {
+        onStart: function () { cancelTween(); },
+        onMove: function (pt) {
+          x[i] = FL.clamp(r1((BASE - pt.y) / L.k), -XMAX, XMAX);
+          draw(); explain({ drag: i });
+        },
+        onKey: function (dx, dy) {
+          if (!dy) return;
+          cancelTween();
+          x[i] = FL.clamp(r1(x[i] - dy * 0.1), -XMAX, XMAX);
+          draw(); explain({ drag: i });
+        }
+      });
+      return { g: g, hit: hit, ring: ring };
+    }
+
+    function outlierIndex(xh) {
+      var k = -1, m = 0;
+      xh.forEach(function (v, j) { if (Math.abs(v) > m) { m = Math.abs(v); k = j; } });
+      return m > 2.3 ? k : -1;
+    }
+
+    function setRect(rect, P, v, clampMax) {
+      var vv = FL.clamp(v, -clampMax, clampMax);
+      var y0 = yv(P, Math.max(vv, 0)), y1 = yv(P, Math.min(vv, 0));
+      rect.setAttribute("y", y0.toFixed(2));
+      rect.setAttribute("height", Math.max(1, y1 - y0).toFixed(2));
+    }
+
+    function draw() {
+      var s = stats(x), xh = norm(x), out = outlierIndex(xh);
+      var y = xh.map(function (v) { return gamma * v + beta; });
+      for (var i = 0; i < N; i++) {
+        setRect(barsX[i], L, x[i], XMAX);
+        setRect(barsY[i], R, y[i], YMAX);
+        setRect(ghosts[i], R, xh[i], YMAX);
+        barsX[i].classList.toggle("is-out", i === out);
+        valsX[i].classList.toggle("is-out", i === out);
+        valsX[i].textContent = x[i].toFixed(1);
+        valsY[i].textContent = y[i].toFixed(2);
+        var hy = yv(L, x[i]);
+        handles[i].hit.setAttribute("cx", cx(L, i)); handles[i].hit.setAttribute("cy", hy);
+        handles[i].ring.setAttribute("cx", cx(L, i)); handles[i].ring.setAttribute("cy", hy);
+        handles[i].g.setAttribute("aria-valuenow", x[i].toFixed(1));
+        handles[i].g.setAttribute("aria-valuetext", "x" + (i + 1) + " = " + x[i].toFixed(1) + "，正規化後 " + xh[i].toFixed(2));
+      }
+      var ghostOn = Math.abs(gamma - 1) > 1e-9 || Math.abs(beta) > 1e-9;
+      ghosts.forEach(function (g) { g.style.opacity = ghostOn ? 1 : 0; });
+      // μ 線與 ±σ 區帶
+      muL.setAttribute("y1", yv(L, s.mu)); muL.setAttribute("y2", yv(L, s.mu));
+      var tL = yv(L, Math.min(XMAX, s.mu + s.sd)), bL = yv(L, Math.max(-XMAX, s.mu - s.sd));
+      bandL.setAttribute("y", tL); bandL.setAttribute("height", Math.max(0, bL - tL));
+      muR.setAttribute("y1", yv(R, beta)); muR.setAttribute("y2", yv(R, beta));
+      var sdY = s.sd > 1e-6 ? gamma : 0;
+      var tR = yv(R, Math.min(YMAX, beta + sdY)), bR = yv(R, Math.max(-YMAX, beta - sdY));
+      bandR.setAttribute("y", tR); bandR.setAttribute("height", Math.max(0, bR - tR));
+      statL.textContent = "μ " + s.mu.toFixed(2) + "   σ " + s.sd.toFixed(2);
+      statR.textContent = "μ " + beta.toFixed(2) + "   σ " + (gamma * (s.sd > 1e-6 ? 1 : 0)).toFixed(2);
+      // 會超出刻度的捷徑按鈕先停用
+      var maxAbs = Math.max.apply(null, x.map(Math.abs));
+      bShift.disabled = Math.max.apply(null, x) + 3 > XMAX;
+      bScale.disabled = maxAbs * 3 > XMAX;
+      if (out >= 0) check("outlier");
+      return { s: s, xh: xh, out: out };
+    }
+
+    /* ---- 任務進度 ---- */
+    function check(key) {
+      var el = plate.querySelector('[data-chk="' + key + '"]');
+      if (el && !el.classList.contains("done")) { el.classList.add("done"); el.setAttribute("aria-label", el.textContent + "（已完成）"); }
+    }
+
+    /* ---- 說明文字 ---- */
+    function explain(ev) {
+      var s = stats(x), xh = norm(x), out = outlierIndex(xh);
+      var msg;
+      if (s.sd < 1e-6) {
+        msg = "所有維度都一樣時 σ = 0。LayerNorm 會在分母加上極小的 <b>ε</b> 避免除以零，輸出全部變成 0（再加上 β）。";
+      } else if (ev.shift) {
+        msg = "全部 +3：μ 從 " + ev.before.mu.toFixed(2) + " 變成 " + s.mu.toFixed(2) + "，但右邊<b>完全沒變</b>——減掉平均，就把整體平移抵消了。";
+      } else if (ev.scale) {
+        msg = "全部 ×3：σ 從 " + ev.before.sd.toFixed(2) + " 變成 " + s.sd.toFixed(2) + "，右邊依然<b>完全沒變</b>——除以標準差，就把整體縮放抵消了。";
+      } else if (ev.gb) {
+        msg = "γ 把輸出整體拉伸為 " + gamma.toFixed(1) + " 倍、β 把它整體平移 " + beta.toFixed(1) + "。正規化把尺度歸零後，模型再用這兩個<b>可學習參數</b>找回它需要的尺度。";
+      } else if (out >= 0) {
+        var others = xh.filter(function (_, j) { return j !== out; });
+        var span = Math.max.apply(null, others) - Math.min.apply(null, others);
+        msg = "x" + (out + 1) + " 是<b>離群值</b>（x̂ = " + xh[out].toFixed(2) + "）。它把 σ 撐大到 " + s.sd.toFixed(2) + "，其餘 7 維被擠進寬度只有 " + span.toFixed(2) + " 的範圍，彼此的差異幾乎看不出來。";
+      } else {
+        msg = "拖動左邊任一個圓點：μ 與 σ 跟著改變，但右邊的 x̂ 永遠維持<b>平均 0、標準差 1</b>。";
+      }
+      narr.innerHTML = msg;
+    }
+
+    /* ---- 按鈕：用補間讓變化看得見 ---- */
+    var stopTween = function () {};
+    function cancelTween() { stopTween(); stopTween = function () {}; }
+    function animateTo(target, ev) {
+      cancelTween();
+      var from = x.slice();
+      stopTween = FL.tween(520, function (e) {
+        for (var i = 0; i < N; i++) x[i] = from[i] + (target[i] - from[i]) * e;
+        draw();
+      }, function () { x = target.slice(); draw(); explain(ev || {}); });
+    }
+    var bShift = plate.querySelector('[data-ln="shift"]'), bScale = plate.querySelector('[data-ln="scale"]');
+    bShift.addEventListener("click", function () {
+      var before = stats(x);
+      check("shift");
+      animateTo(x.map(function (v) { return r1(v + 3); }), { shift: true, before: before });
+    });
+    bScale.addEventListener("click", function () {
+      var before = stats(x);
+      check("scale");
+      animateTo(x.map(function (v) { return r1(v * 3); }), { scale: true, before: before });
+    });
+    plate.querySelector('[data-ln="outlier"]').addEventListener("click", function () {
+      var t = x.slice(), others = t.filter(function (_, j) { return j !== 2; });
+      var mu = others.reduce(function (a, b) { return a + b; }, 0) / others.length;
+      t[2] = FL.clamp(r1(mu + 8), -XMAX, XMAX);
+      if (t[2] - mu < 6) t[2] = FL.clamp(r1(mu - 8), -XMAX, XMAX);
+      animateTo(t, {});
+    });
+    plate.querySelector('[data-ln="random"]').addEventListener("click", function () {
+      animateTo(x.map(function () { return r1(Math.random() * 6 - 3); }), {});
+    });
+    plate.querySelector('[data-ln="reset"]').addEventListener("click", function () {
+      gamma = 1; beta = 0; gIn.value = 1; bIn.value = 0; gOut.textContent = "1.0"; bOut.textContent = "0.0";
+      animateTo(INIT.slice(), {});
+    });
+    gIn.addEventListener("input", function () { gamma = +gIn.value; gOut.textContent = gamma.toFixed(1); draw(); explain({ gb: true }); });
+    bIn.addEventListener("input", function () { beta = +bIn.value; bOut.textContent = beta.toFixed(1); draw(); explain({ gb: true }); });
+
+    draw();
+    explain({});
+  })();
+
+  /* =========================================================
+     FIG 4.3 — 殘差流河道
      ========================================================= */
   (function river() {
-    var svg = document.getElementById("river-svg"), plate = document.getElementById("fig-4-2");
+    var svg = document.getElementById("river-svg"), plate = document.getElementById("fig-4-3");
     var slider = document.getElementById("river-n"), out = document.getElementById("river-n-out");
     var list = document.getElementById("river-list"), title = document.getElementById("river-title"), narr = document.getElementById("river-narr");
     var playBtn = document.getElementById("river-play");
@@ -678,10 +943,10 @@
   })();
 
   /* =========================================================
-     FIG 4.3 — 參數量估算器
+     FIG 4.4 — 參數量估算器
      ========================================================= */
   (function calc() {
-    var plate = document.getElementById("fig-4-3");
+    var plate = document.getElementById("fig-4-4");
     var DS = [128, 256, 384, 512, 768, 1024, 1280, 1600, 2048, 2560, 4096, 5120, 8192, 12288];
     var VS = [8000, 32000, 50257, 100000, 128000, 256000];
     var PRESETS = [

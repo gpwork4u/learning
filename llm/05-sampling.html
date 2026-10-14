@@ -13,7 +13,7 @@
 <style>
   /* ---- 本章圖版樣式 ---- */
 
-  /* 機率分布橫條（FIG 5.1 / 5.2 / 5.3 共用） */
+  /* 機率分布橫條（FIG 5.1 / 5.3 / 5.4 共用） */
   .dist { display: grid; gap: 6px; margin: var(--s-3) 0 0; padding: 0; }
   .dist-row {
     display: grid; grid-template-columns: 5.4em minmax(0, 1fr) 4.4em 2.6em; gap: var(--s-3); align-items: center;
@@ -47,7 +47,31 @@
   .ro-pick { margin: var(--s-3) 0 0; padding-top: var(--s-3); border-top: 1px solid var(--rule); font-size: .9rem; min-height: 3em; }
   .ro-pick b { font: 700 1.3rem/1.2 var(--f-display); color: var(--accent); }
 
-  /* FIG 5.2 自迴歸迴圈 */
+  /* FIG 5.2 動手做：自己捏一個分布 */
+  #lab-svg { width: 100%; height: auto; display: block; margin-top: var(--s-3); }
+  .lb-grid { stroke: var(--rule); stroke-width: 1; }
+  .lb-zero { stroke: var(--rule-strong); stroke-width: 1.2; }
+  .lb-ax { font: 500 11px var(--f-mono); fill: var(--text-muted); text-anchor: end; dominant-baseline: central; }
+  .lb-title { font: 600 11px var(--f-mono); fill: var(--text-muted); letter-spacing: .08em; }
+  .lb-tok { font: 500 15px var(--f-body); fill: var(--text); text-anchor: middle; dominant-baseline: central; }
+  .lb-logit { fill: var(--text); fill-opacity: .72; }
+  .lb-logit.neg { fill-opacity: .36; }
+  .lb-val { font: 600 12px var(--f-mono); fill: var(--text); text-anchor: middle; font-variant-numeric: tabular-nums; }
+  .lb-prob { fill: var(--data-k); }
+  .lb-pct { font: 600 12px var(--f-mono); fill: var(--text); text-anchor: middle; font-variant-numeric: tabular-nums; }
+  .lb-emp { stroke: var(--data-q); stroke-width: 3; transition: opacity var(--dur-2) linear; }
+  .lb-hit { fill: transparent; transition: fill var(--dur-1) linear; }
+  .handle:hover .lb-hit, .handle.is-dragging .lb-hit { fill: var(--accent-soft); }
+  .handle:focus-visible .lb-hit { fill: var(--data-q-soft); }
+  .lb-grip { stroke: var(--text-muted); stroke-width: 1; pointer-events: none; }
+  .lab-goals-h { margin-top: var(--s-4) !important; padding-top: var(--s-3); border-top: 1px solid var(--rule); }
+  .prose .lab-goals { list-style: none; margin: var(--s-2) 0 0; padding: 0; display: grid; gap: var(--s-2); }
+  .prose .lab-goals li { margin: 0; display: grid; grid-template-columns: 18px minmax(0, 1fr); gap: var(--s-2); font-size: .84rem; line-height: 1.5; color: var(--text-muted); }
+  .lab-goals .box { width: 15px; height: 15px; margin-top: 3px; border: 1px solid var(--rule-strong); border-radius: var(--radius-1); display: grid; place-items: center; font: 700 11px/1 var(--f-mono); color: transparent; transition: background var(--dur-2) linear, color var(--dur-2) linear; }
+  .lab-goals li.done { color: var(--text); }
+  .lab-goals li.done .box { background: var(--accent); border-color: var(--accent); color: var(--surface-page); }
+
+  /* FIG 5.3 自迴歸迴圈 */
   .lp-box rect { fill: var(--surface-page); stroke: var(--rule-strong); stroke-width: 1; transition: fill var(--dur-2) linear, stroke var(--dur-2) linear; }
   .lp-box .lp-t { font: 700 15px var(--f-body); fill: var(--text); text-anchor: middle; }
   .lp-box .lp-s { font: 500 10.5px var(--f-mono); fill: var(--text-muted); text-anchor: middle; }
@@ -68,7 +92,7 @@
   .gen-out { margin: var(--s-4) 0 0; font: 700 1.15rem/1.5 var(--f-display); min-height: 1.5em; }
   .gen-empty { font-size: .86rem; color: var(--text-faint); margin: var(--s-3) 0 0; }
 
-  /* FIG 5.3 溫度並排 */
+  /* FIG 5.4 溫度並排 */
   .tgrid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 220px), 1fr)); gap: var(--s-5); }
   .tpanel { border-left: 1px solid var(--rule-strong); padding-left: var(--s-4); min-width: 0; }
   .tpanel h4 { margin: 0; font: 600 1.2rem/1.2 var(--f-mono); }
@@ -110,10 +134,11 @@
     <div>
       <p class="meta-label">LLM 理論 · 第 05 章</p>
       <h1 class="chapter-title">生成與取樣<span class="en">Decoding &amp; Sampling</span></h1>
-      <p class="chapter-deck">模型每一步只輸出一張「下一個 token 的機率表」，真正決定寫出哪個字的是解碼策略。這一章用三張圖版拆開這最後一哩路：機率從哪來、怎麼一次一個字接下去，以及溫度、Top-k、Top-p 如何改變輸出的性格。</p>
+      <p class="chapter-deck">模型每一步只輸出一張「下一個 token 的機率表」，真正決定寫出哪個字的是解碼策略。這一章用四張圖版（其中一張讓你親手捏分布）拆開這最後一哩路：機率從哪來、怎麼一次一個字接下去，以及溫度、Top-k、Top-p 如何改變輸出的性格。</p>
       <ul class="chapter-meta">
         <li>閱讀 <b>11 分鐘</b></li>
-        <li>互動圖版 <b>3</b></li>
+        <li>互動圖版 <b>4</b></li>
+        <li>動手實驗 <b>1</b></li>
         <li>先備 <b>第 04 章 Transformer 區塊</b></li>
       </ul>
     </div>
@@ -184,12 +209,53 @@
         <p>機率分布本身是<strong>確定的</strong>：同樣的前文、同樣的模型，算出來的 logits 永遠一樣。同一個問題每次回答不同，是最後「抽樣」這一步造成的，不是模型改變了想法。</p>
       </div>
 
+      <figure class="plate is-lab" id="fig-5-2" tabindex="-1">
+        <div class="plate-head">
+          <span class="plate-fig">FIG 5.2<span class="lab-tag">動手做</span></span>
+          <h3 class="plate-title">自己捏一個分布：拖動 logits，看 softmax 怎麼分配機率</h3>
+          <span class="plate-hint">拖曳長條 / ↑↓ 鍵</span>
+        </div>
+        <div class="lab-task"><p>拖動上排的 logit 長條，把分布捏成「第一名約 50%、第二名約 30%」；完成後再挑戰右欄另外兩題。</p></div>
+        <div class="plate-stage">
+          <div class="stage-split">
+            <div>
+              <p class="ctx"><span class="meta-label">前文</span><span class="ctx-text">我養了一隻<span class="ctx-cursor" aria-hidden="true"></span></span></p>
+              <svg id="lab-svg" viewBox="0 0 560 424" role="group" aria-label="可拖曳的 logit 長條（上）與對應的 softmax 機率（下）"></svg>
+            </div>
+            <div class="readout">
+              <p class="meta-label">讀數</p>
+              <dl>
+                <dt>熵 bits</dt><dd id="lab-ent">0.00</dd>
+                <dt>最高機率</dt><dd><span id="lab-max">0.0</span>%</dd>
+                <dt>有效候選 2ᴴ</dt><dd id="lab-eff">0.00</dd>
+                <dt>已抽樣</dt><dd id="lab-n">0</dd>
+                <dt>最大誤差</dt><dd id="lab-gap">—</dd>
+              </dl>
+              <p class="meta-label lab-goals-h">挑戰</p>
+              <ol class="lab-goals" id="lab-goals"></ol>
+            </div>
+          </div>
+        </div>
+        <div class="plate-controls">
+          <div class="field"><label for="lab-t">溫度 T</label><input type="range" id="lab-t" min="0.1" max="3" step="0.05" value="1"><output for="lab-t" id="lab-t-o">1.00</output></div>
+          <button class="btn btn-ghost btn-sm" type="button" id="lab-up">全部 +2</button>
+          <button class="btn btn-ghost btn-sm" type="button" id="lab-down">全部 −2</button>
+          <span class="spacer"></span>
+          <button class="btn btn-primary btn-sm" type="button" id="lab-s100">抽 100 次</button>
+          <button class="btn btn-ghost btn-sm" type="button" id="lab-s1000">抽 1000 次</button>
+          <button class="btn btn-ghost btn-sm" type="button" id="lab-clear">清除抽樣</button>
+          <button class="btn btn-ghost btn-sm" type="button" id="lab-reset">重設</button>
+        </div>
+        <p class="plate-narr" id="lab-narr"></p>
+        <p class="plate-cap">上排是 logits（可正可負，粗線為 0），下排是 softmax 之後的機率。藍色刻度是實際抽樣的頻率：抽得越多，刻度越貼近長條頂端。「最大誤差」是六個候選中，抽樣頻率與理論機率相差最多的那一個。</p>
+      </figure>
+
       <h2 id="autoregressive"><span class="sec">§ 5.2</span>一次一個 token：自迴歸生成</h2>
       <p>LLM 並不會一口氣寫出整段話。它預測下一個 token 的分布、從中挑一個、把它<strong>接回輸入的尾端</strong>，再用變長的序列預測下一個……直到產生結束符號或達到長度上限。這種「自己的輸出變成自己的輸入」的方式叫<span class="term" title="Autoregressive">自迴歸</span>。</p>
 
-      <figure class="plate" id="fig-5-2" tabindex="-1">
+      <figure class="plate" id="fig-5-3" tabindex="-1">
         <div class="plate-head">
-          <span class="plate-fig">FIG 5.2</span>
+          <span class="plate-fig">FIG 5.3</span>
           <h3 class="plate-title">按「生成」，看句子一個 token 一個 token 長出來</h3>
           <span class="plate-hint">切換 Greedy / 取樣</span>
         </div>
@@ -229,14 +295,14 @@
 
       <h2 id="strategies"><span class="sec">§ 5.3</span>解碼策略：從分布中挑哪一個？</h2>
       <h3>Greedy：永遠挑最高的</h3>
-      <p>最直覺的做法是每步都挑機率最高的 token。結果完全可重現，但常常平淡，而且容易陷入重複迴圈。在 FIG 5.2 切到 Greedy，不管按幾次重設，都會得到同一句話。</p>
+      <p>最直覺的做法是每步都挑機率最高的 token。結果完全可重現，但常常平淡，而且容易陷入重複迴圈。在 FIG 5.3 切到 Greedy，不管按幾次重設，都會得到同一句話。</p>
 
       <h3>溫度：讓分布變尖或變平</h3>
       <p>把 logits 先除以 T 再做 softmax。T &lt; 1 會放大分數之間的差距，高分者更集中；T &gt; 1 會縮小差距，冷門候選也分到機率。T 趨近 0 時就等於 Greedy。</p>
 
-      <figure class="plate" id="fig-5-3" tabindex="-1">
+      <figure class="plate" id="fig-5-4" tabindex="-1">
         <div class="plate-head">
-          <span class="plate-fig">FIG 5.3</span>
+          <span class="plate-fig">FIG 5.4</span>
           <h3 class="plate-title">同一組 logits，三種溫度</h3>
           <span class="plate-hint">捲動到此處播放</span>
         </div>
@@ -423,10 +489,226 @@
   })();
 
   /* =========================================================
-     FIG 5.2 — 自迴歸生成迴圈
+     FIG 5.2 — 動手做：自己捏一個分布
+     ========================================================= */
+  (function logitLab() {
+    var plate = document.getElementById("fig-5-2");
+    var svg = document.getElementById("lab-svg");
+    var TOKS = ["貓", "狗", "鳥", "魚", "兔子", "恐龍"];
+    var INIT = [1.5, 1.4, 0.6, 0.2, -0.5, -3.0];
+    var LMIN = -4, LMAX = 6;
+    var logits = INIT.slice(), counts = TOKS.map(function () { return 0; }), total = 0;
+    var probs = [], busy = false, cancelTween = null;
+    var sT = document.getElementById("lab-t"), oT = document.getElementById("lab-t-o");
+    var roEnt = document.getElementById("lab-ent"), roMax = document.getElementById("lab-max"), roEff = document.getElementById("lab-eff");
+    var roN = document.getElementById("lab-n"), roGap = document.getElementById("lab-gap");
+    var narr = document.getElementById("lab-narr");
+    var bUp = document.getElementById("lab-up"), bDown = document.getElementById("lab-down");
+    var b100 = document.getElementById("lab-s100"), b1000 = document.getElementById("lab-s1000");
+
+    /* 版面 */
+    var X0 = 96, DX = 84, BW = 40;
+    function cx(i) { return X0 + i * DX; }
+    function yL(l) { return 40 + (LMAX - l) * 17; }        // logit 6 → 40，−4 → 210
+    function yP(p) { return 404 - p * 120; }               // 機率 1 → 284，0 → 404
+    var S0 = yL(0);
+
+    S("text", { class: "lb-title", x: 52, y: 20, text: "LOGIT z" }, svg);
+    [-4, -2, 0, 2, 4, 6].forEach(function (l) {
+      S("line", { class: l === 0 ? "lb-zero" : "lb-grid", x1: 52, x2: 548, y1: yL(l), y2: yL(l) }, svg);
+      S("text", { class: "lb-ax", x: 46, y: yL(l), text: (l > 0 ? "+" : "") + l }, svg);
+    });
+    S("text", { class: "lb-title", x: 52, y: 268, text: "機率 p" }, svg);
+    [0, 0.5, 1].forEach(function (p) {
+      S("line", { class: p === 0 ? "lb-zero" : "lb-grid", x1: 52, x2: 548, y1: yP(p), y2: yP(p) }, svg);
+      S("text", { class: "lb-ax", x: 46, y: yP(p), text: Math.round(p * 100) + "%" }, svg);
+    });
+
+    var cols = TOKS.map(function (t, i) {
+      var x = cx(i);
+      var bar = S("rect", { class: "lb-logit", x: x - BW / 2, width: BW }, svg);
+      S("text", { class: "lb-tok", x: x, y: 240, text: t }, svg);
+      var pbar = S("rect", { class: "lb-prob", x: x - BW / 2, width: BW }, svg);
+      var pct = S("text", { class: "lb-pct" }, svg);
+      pct.setAttribute("x", x);
+      var emp = S("line", { class: "lb-emp", x1: x - 27, x2: x + 27, opacity: 0 }, svg);
+
+      // 整欄都是拖曳熱區；頂端的握把顯示目前位置
+      var h = S("g", { role: "slider", "aria-label": "「" + t + "」的 logit", "aria-valuemin": LMIN, "aria-valuemax": LMAX }, svg);
+      S("rect", { class: "lb-hit", x: x - 38, y: yL(LMAX) - 10, width: 76, height: yL(LMIN) - yL(LMAX) + 20 }, h);
+      var grip = S("rect", { class: "handle-ring", x: x - 24, width: 48, height: 10, rx: 2 }, h);
+      var g1 = S("line", { class: "lb-grip", x1: x - 8, x2: x + 8 }, h);
+      var val = S("text", { class: "lb-val", x: x }, h);
+      FL.drag(svg, h, {
+        onStart: function () { stopTween(); },
+        onMove: function (pt) { setLogit(i, LMAX - (pt.y - 40) / 17, "drag"); },
+        onKey: function (dx, dy) { stopTween(); setLogit(i, logits[i] - dy * 0.1, "drag"); }
+      });
+      return { bar: bar, pbar: pbar, pct: pct, emp: emp, h: h, grip: grip, g1: g1, val: val };
+    });
+
+    function entropy(ps) { return ps.reduce(function (a, p) { return p > 0 ? a - p * Math.log2(p) : a; }, 0); }
+    function T() { return +sT.value; }
+    function order() { return probs.map(function (p, i) { return i; }).sort(function (a, b) { return probs[b] - probs[a]; }); }
+
+    /* 挑戰：達成後保持打勾，按「重設」才清除 */
+    var GOALS = [
+      { text: "第一名約 50%、第二名約 30%（誤差 ±5%）",
+        test: function () { var o = order(); return Math.abs(probs[o[0]] - 0.5) <= 0.05 && Math.abs(probs[o[1]] - 0.3) <= 0.05; } },
+      { text: "在 T = 1 時，讓熵超過 2.4 bits（六選一的上限是 2.58）",
+        test: function () { return Math.abs(T() - 1) < 1e-9 && entropy(probs) > 2.4; } },
+      { text: "第一名機率超過 90%，但第一、二名的 logit 相差不到 1（提示：溫度）",
+        test: function () { var o = order(); return probs[o[0]] > 0.9 && logits[o[0]] - logits[o[1]] < 1; } }
+    ];
+    var goalList = document.getElementById("lab-goals");
+    GOALS.forEach(function (g) {
+      g.li = E("li", {}, goalList);
+      E("span", { class: "box", text: "✓", "aria-hidden": "true" }, g.li);
+      g.label = E("span", { text: g.text }, g.li);
+      g.done = false;
+    });
+    function checkGoals() {
+      var fresh = [];
+      GOALS.forEach(function (g, k) {
+        if (!g.done && g.test()) { g.done = true; fresh.push(k + 1); }
+        g.li.classList.toggle("done", g.done);
+        g.li.setAttribute("aria-label", (g.done ? "已完成：" : "未完成：") + g.text);
+      });
+      return fresh;
+    }
+
+    function render() {
+      probs = FL.softmax(logits, T());
+      cols.forEach(function (c, i) {
+        var l = logits[i], y = yL(l);
+        c.bar.setAttribute("y", Math.min(y, S0));
+        c.bar.setAttribute("height", Math.max(1, Math.abs(y - S0)));
+        c.bar.classList.toggle("neg", l < 0);
+        c.grip.setAttribute("y", y - 5);
+        c.g1.setAttribute("y1", y); c.g1.setAttribute("y2", y);
+        c.val.setAttribute("y", l >= 0 ? y - 12 : y + 20);
+        c.val.textContent = (l > 0 ? "+" : "") + l.toFixed(1);
+        c.h.setAttribute("aria-valuenow", l.toFixed(1));
+        c.h.setAttribute("aria-valuetext", l.toFixed(1) + "，機率 " + (probs[i] * 100).toFixed(1) + "%");
+        c.pbar.setAttribute("y", yP(probs[i]));
+        c.pbar.setAttribute("height", Math.max(0.5, probs[i] * 120));
+        c.pct.setAttribute("y", yP(probs[i]) - 7);
+        c.pct.textContent = (probs[i] * 100).toFixed(1) + "%";
+        var f = total ? counts[i] / total : 0;
+        c.emp.setAttribute("y1", yP(f)); c.emp.setAttribute("y2", yP(f));
+        c.emp.setAttribute("opacity", total ? 1 : 0);
+      });
+      var H = entropy(probs);
+      roEnt.textContent = H.toFixed(2);
+      roMax.textContent = (Math.max.apply(null, probs) * 100).toFixed(1);
+      roEff.textContent = Math.pow(2, H).toFixed(2);
+      roN.textContent = total;
+      roGap.textContent = total ? (Math.max.apply(null, probs.map(function (p, i) { return Math.abs(p - counts[i] / total); })) * 100).toFixed(1) + "%" : "—";
+      var lo = Math.min.apply(null, logits), hi = Math.max.apply(null, logits);
+      bUp.disabled = busy || hi + 2 > LMAX + 1e-9;
+      bDown.disabled = busy || lo - 2 < LMIN - 1e-9;
+      return checkGoals();
+    }
+
+    function goalNote(fresh) {
+      return fresh.length ? "<b>✓ 完成挑戰 " + fresh.join("、") + "。</b> " : "";
+    }
+    function clearSamples() { total = 0; counts = counts.map(function () { return 0; }); }
+
+    function setLogit(i, v, why) {
+      v = Math.round(FL.clamp(v, LMIN, LMAX) * 10) / 10;
+      if (v === logits[i] && why !== "force") return;
+      var had = total > 0;
+      logits[i] = v;
+      clearSamples();
+      var fresh = render();
+      var o = order(), a = o[0], b = o[1];
+      var ratio = Math.exp((logits[a] - logits[b]) / T());
+      narr.innerHTML = goalNote(fresh) + "「" + TOKS[i] + "」的 logit 是 <b>" + v.toFixed(1) + "</b>，機率 " + (probs[i] * 100).toFixed(1) + "%。" +
+        "第一名「" + TOKS[a] + "」是第二名「" + TOKS[b] + "」的 <b>" + ratio.toFixed(2) + " 倍</b> = e<sup>Δz / T</sup>——機率比只取決於 logit 的<b>差</b>。" +
+        (had ? " 分布變了，先前的抽樣已清除。" : "");
+    }
+
+    function stopTween() { if (cancelTween) { cancelTween(); cancelTween = null; } }
+    function animateTo(target, after) {
+      stopTween();
+      var from = logits.slice();
+      cancelTween = FL.tween(520, function (e) {
+        logits = from.map(function (v, i) { return Math.round((v + (target[i] - v) * e) * 100) / 100; });
+        render();
+      }, function () { cancelTween = null; logits = target.slice(); var fresh = render(); if (after) after(fresh); });
+    }
+
+    function shift(d) {
+      var before = probs.slice();
+      animateTo(logits.map(function (v) { return Math.round((v + d) * 10) / 10; }), function (fresh) {
+        var diff = Math.max.apply(null, probs.map(function (p, i) { return Math.abs(p - before[i]); }));
+        narr.innerHTML = goalNote(fresh) + "所有 logits 都" + (d > 0 ? "加了 2" : "減了 2") + "，上排整體" + (d > 0 ? "上移" : "下移") + "，但下排的機率<b>完全沒變</b>（最大變化 " + (diff * 100).toFixed(2) + "%）。softmax 只在乎 logits 之間的差距，這也是實作時可以先減掉最大值、避免 exp 溢位的原因。";
+      });
+    }
+
+    function draw() {
+      var r = Math.random(), cum = 0;
+      for (var i = 0; i < probs.length; i++) { cum += probs[i]; if (r < cum) return i; }
+      return probs.length - 1;
+    }
+    function sample(n) {
+      if (busy) return;
+      stopTween();
+      busy = true;
+      [b100, b1000].forEach(function (b) { b.disabled = true; });
+      var frames = FL.reducedMotion() ? 1 : 24, done = 0, per = Math.ceil(n / frames);
+      (function tick() {
+        var k = Math.min(per, n - done);
+        for (var j = 0; j < k; j++) { counts[draw()]++; total++; }
+        done += k;
+        render();
+        if (done < n) { requestAnimationFrame(tick); return; }
+        busy = false;
+        [b100, b1000].forEach(function (b) { b.disabled = false; });
+        var fresh = render();
+        var gap = Math.max.apply(null, probs.map(function (p, i) { return Math.abs(p - counts[i] / total); }));
+        narr.innerHTML = goalNote(fresh) + "累計抽了 <b>" + total + "</b> 次，藍色刻度是實際頻率，與理論機率最大差 <b>" + (gap * 100).toFixed(1) + "%</b>。" +
+          (total < 500 ? "再多抽幾次，差距會繼續縮小。" : "抽樣次數越多，頻率越貼近機率——這就是大數法則；但單看任何一次抽樣，結果仍然是隨機的。");
+      })();
+    }
+
+    sT.addEventListener("input", function () {
+      oT.textContent = T().toFixed(2);
+      var had = total > 0;
+      clearSamples();
+      var fresh = render();
+      narr.innerHTML = goalNote(fresh) + "溫度 T = " + T().toFixed(2) + "：logits 都先除以 T。" +
+        (T() < 1 ? "T 越小，差距被<b>放大</b>，第一名越來越霸道。" : T() > 1 ? "T 越大，差距被<b>壓縮</b>，分布越來越平均。" : "T = 1 就是標準 softmax。") +
+        "上排的 logits 本身沒有動。" + (had ? " 先前的抽樣已清除。" : "");
+    });
+    bUp.addEventListener("click", function () { shift(2); });
+    bDown.addEventListener("click", function () { shift(-2); });
+    b100.addEventListener("click", function () { sample(100); });
+    b1000.addEventListener("click", function () { sample(1000); });
+    document.getElementById("lab-clear").addEventListener("click", function () {
+      clearSamples(); render();
+      narr.innerHTML = "抽樣紀錄已清除。";
+    });
+    document.getElementById("lab-reset").addEventListener("click", function () {
+      stopTween();
+      sT.value = 1; oT.textContent = "1.00";
+      logits = INIT.slice(); clearSamples();
+      GOALS.forEach(function (g) { g.done = false; });
+      render();
+      narr.innerHTML = INTRO;
+    });
+
+    var INTRO = "上下拖動每一欄（或聚焦後按 ↑↓，Shift 加速），改變該候選的 logit。下排的機率會即時重新分配：總和永遠是 100%，一個變高，其他就得讓出份額。";
+    render();
+    narr.innerHTML = INTRO;
+  })();
+
+  /* =========================================================
+     FIG 5.3 — 自迴歸生成迴圈
      ========================================================= */
   (function autoregressive() {
-    var plate = document.getElementById("fig-5-2");
+    var plate = document.getElementById("fig-5-3");
     // 示意模型：只看最後一個 token 的查表機率（logits）
     var END = ["。", 2.6], COMMA = ["，", 1.6];
     var MODEL = {
@@ -614,7 +896,7 @@
   })();
 
   /* =========================================================
-     FIG 5.3 — 溫度並排比較
+     FIG 5.4 — 溫度並排比較
      ========================================================= */
   (function temperatures() {
     var grid = document.getElementById("tgrid");

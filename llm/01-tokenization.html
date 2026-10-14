@@ -57,7 +57,42 @@
   .vocab .tok { font-size: .76rem; padding: 1px 6px; }
   .vocab .tok.merged { border-color: var(--accent); }
 
-  /* FIG 1.3 即時分詞器 */
+  /* FIG 1.3 動手做：訓練你自己的分詞器 */
+  .lab-corpus { display: block; resize: vertical; min-height: 6.6em; margin: var(--s-2) 0 var(--s-4); font-size: .88rem; line-height: 1.6; }
+  .lab-pairs { list-style: none; margin: var(--s-2) 0 0; padding: 0; display: grid; gap: 2px; }
+  .lab-pair {
+    appearance: none; width: 100%; display: grid; grid-template-columns: 7.5em minmax(0, 1fr) 2.2em; gap: var(--s-2); align-items: center;
+    padding: 5px 6px; border: 1px solid transparent; border-radius: var(--radius-1); background: transparent; cursor: pointer;
+    font: 500 .8rem/1.3 var(--f-mono); text-align: left; color: var(--text);
+    transition: background var(--dur-1) linear, border-color var(--dur-1) linear;
+  }
+  .lab-pair:hover { border-color: var(--rule-strong); background: var(--surface-page); }
+  .lab-pair .pp { white-space: pre; overflow: hidden; text-overflow: ellipsis; }
+  .lab-pair .b { height: 8px; background: var(--surface-sunken); position: relative; }
+  .lab-pair .b i { position: absolute; inset: 0 auto 0 0; background: var(--text-muted); transition: width var(--dur-3) var(--ease-out); }
+  .lab-pair .c { text-align: right; font-variant-numeric: tabular-nums; }
+  .lab-pair.top { color: var(--accent); border-color: var(--rule); }
+  .lab-pair.top .b i { background: var(--data-hi); }
+  .lab-pair .pick { grid-column: 1 / -1; font: 600 .66rem/1 var(--f-mono); letter-spacing: .06em; color: var(--accent); }
+  .lab-pairs-empty { font-size: .84rem; color: var(--text-muted); margin: var(--s-2) 0 0; }
+  .lab-rules { list-style: none; margin: var(--s-2) 0 0; padding: 0; max-height: 11em; overflow-y: auto; font: 500 .78rem/1.7 var(--f-mono); counter-reset: rule; }
+  .lab-rules li { margin: 0; white-space: pre; counter-increment: rule; }
+  .lab-rules li::before { content: counter(rule, decimal-leading-zero) "  "; color: var(--text-faint); }
+  .lab-rules li.latest { color: var(--accent); }
+  .lab-rules li.lab-rules-empty { counter-increment: none; color: var(--text-muted); font-family: var(--f-body); white-space: normal; }
+  .lab-rules li.lab-rules-empty::before { content: none; }
+  .lab-test { display: grid; gap: var(--s-2); margin-top: var(--s-5); padding-top: var(--s-4); border-top: 1px solid var(--rule); }
+  .lab-test-out { display: flex; flex-wrap: wrap; gap: 6px 14px; min-height: 2.2em; align-items: center; }
+  .lab-wg { display: inline-flex; gap: 2px; }
+  .lab-wg .tok { padding: 2px 6px; }
+  .lab-wg .tok.merged { border-color: var(--accent); background: var(--accent-soft); }
+  .lab-test-meta { margin: 0; font: 500 .8rem/1.6 var(--f-mono); color: var(--text-muted); }
+  .lab-test-meta b { color: var(--text); font-weight: 600; }
+  .lab-status { margin-left: var(--s-2); font: 600 .78rem var(--f-mono); }
+  .lab-status.done { color: var(--data-v); }
+  .lab-status.over { color: var(--accent); }
+
+  /* FIG 1.4 即時分詞器 */
   .tk-input-row { display: grid; gap: var(--s-3); margin-bottom: var(--s-4); }
   .tk-out { display: flex; flex-wrap: wrap; gap: 4px; min-height: 3em; align-content: flex-start; }
   .tk-out .tok { display: inline-grid; justify-items: center; gap: 0; padding: 3px 7px 2px; line-height: 1.25; }
@@ -103,7 +138,8 @@
       <p class="chapter-deck">模型看不懂文字，只看得懂整數。在任何「理解」發生之前，文字必須先被切成一個個 token、再換成編號。這一章看三件事：該切多細、BPE 怎麼自己長出詞彙表，以及 token 數為什麼直接決定成本。</p>
       <ul class="chapter-meta">
         <li>閱讀 <b>10 分鐘</b></li>
-        <li>互動圖版 <b>3</b></li>
+        <li>互動圖版 <b>4</b></li>
+        <li>動手實驗 <b>1</b></li>
         <li>先備 <b>無</b></li>
       </ul>
     </div>
@@ -206,13 +242,64 @@
         <p>實務上的 BPE 從 256 個<strong>位元組</strong>出發（byte-level BPE），所以任何語言、任何 emoji 都能被表示，永遠不會有未知字。GPT-2 的詞彙表約 5 萬個 token，近年的模型則常見 10 萬到 20 萬。</p>
       </div>
 
+      <p>看完演算法自己跑，現在換你來當 BPE。下面的語料可以自由修改；每一輪由你決定要合併哪一對，也可以交給演算法自動挑。順便觀察：你的選擇和 BPE 的「貪婪」選擇，對語料 token 數的影響差多少？</p>
+
+      <figure class="plate is-lab" id="fig-1-3" tabindex="-1">
+        <div class="plate-head">
+          <span class="plate-fig">FIG 1.3<span class="lab-tag">動手做</span></span>
+          <h3 class="plate-title">訓練你自己的分詞器</h3>
+          <span class="plate-hint">點配對來合併</span>
+        </div>
+        <div class="lab-task"><p>合併不超過 <b>6</b> 次，讓測試句的 token 數少於字元數的一半。<span class="lab-status" id="lab-status" aria-live="polite"></span></p></div>
+        <div class="plate-stage">
+          <div class="stage-split">
+            <div>
+              <label class="meta-label" for="lab-corpus">訓練語料（以空白分詞，可自行修改）</label>
+              <textarea class="text-input lab-corpus" id="lab-corpus" rows="4" maxlength="800" spellcheck="false" autocomplete="off"></textarea>
+              <div class="bpe-stats">
+                <div><span class="meta-label">語料 token 總數</span><span class="v" id="lab-total">0</span></div>
+                <div><span class="meta-label">詞彙表大小</span><span class="v" id="lab-vsize">0</span></div>
+                <div><span class="meta-label">已合併</span><span class="v" id="lab-merges">0</span></div>
+              </div>
+              <p class="meta-label">語料中的詞（依頻次，前 8 個）</p>
+              <div class="bpe-corpus" id="lab-words"></div>
+            </div>
+            <div class="bpe-side">
+              <div>
+                <p class="meta-label">相鄰配對：點一下就合併</p>
+                <ul class="lab-pairs" id="lab-pairs" aria-label="相鄰配對頻次"></ul>
+              </div>
+              <div>
+                <p class="meta-label">已學到的合併規則（依序）</p>
+                <ol class="lab-rules" id="lab-rules"></ol>
+              </div>
+            </div>
+          </div>
+          <div class="lab-test">
+            <label class="meta-label" for="lab-test-in">測試句：用目前學到的規則依序切分</label>
+            <input class="text-input" id="lab-test-in" type="text" maxlength="120" spellcheck="false" autocomplete="off">
+            <div class="lab-test-out" id="lab-test-out" aria-live="polite"></div>
+            <p class="lab-test-meta" id="lab-test-meta"></p>
+          </div>
+        </div>
+        <div class="plate-controls">
+          <button class="btn btn-primary btn-sm" type="button" id="lab-auto1">自動合併一次</button>
+          <button class="btn btn-sm" type="button" id="lab-autoall">自動合併到底</button>
+          <button class="btn btn-ghost btn-sm" type="button" id="lab-undo">復原一步</button>
+          <span class="spacer"></span>
+          <button class="btn btn-ghost btn-sm" type="button" id="lab-reset">重設</button>
+        </div>
+        <p class="plate-narr" id="lab-narr" aria-live="polite"></p>
+        <p class="plate-cap">語料以空白切詞、每個詞從單一字元開始；沒有空白的中文會整行當作一個「詞」，同樣可以合併。「自動」一律挑最高頻的配對（同頻取最先出現者），與 FIG 1.2 規則相同；自動合併到底最多 30 次。測試句裡語料沒見過的字元會保持單字元。</p>
+      </figure>
+
       <h2 id="vocab-ids"><span class="sec">§ 1.3</span>Token、ID 與詞彙表</h2>
       <p>訓練好的分詞器就是一張<strong>詞彙表</strong>加上一份合併規則。每個 token 對應一個整數 ID，模型真正收到的是這串 ID；在第 02 章，每個 ID 會再被換成一個嵌入向量。</p>
       <p>幾個常讓人意外的細節：空白通常黏在下一個詞的前面（「␣model」和「model」是兩個不同的 token）；大小寫不同也是不同 token；詞彙表沒收錄的字會退回位元組，一個中文字在 UTF-8 裡佔 3 個位元組，最壞就變成 3 個 token。</p>
 
-      <figure class="plate" id="fig-1-3" tabindex="-1">
+      <figure class="plate" id="fig-1-4" tabindex="-1">
         <div class="plate-head">
-          <span class="plate-fig">FIG 1.3</span>
+          <span class="plate-fig">FIG 1.4</span>
           <h3 class="plate-title">輸入任何文字，看它被切成哪些 token</h3>
           <span class="plate-hint">直接輸入</span>
         </div>
@@ -490,10 +577,218 @@
   })();
 
   /* =========================================================
-     FIG 1.3 — 即時分詞器（迷你詞彙表 + 最長匹配 + 位元組退回）
+     FIG 1.3 — 動手做：訓練你自己的分詞器
+     ========================================================= */
+  (function lab() {
+    var SEP = "\u0001", LIMIT = 6, AUTO_MAX = 30;
+    var DEFAULT_CORPUS = "the cat sat on the mat\nthe fat cat ate the rat\nthat cat sat on that hat\nthe rat sat at the mat";
+    var DEFAULT_TEST = "the fat cat sat on the mat";
+    var $ = function (id) { return document.getElementById(id); };
+    var corpusIn = $("lab-corpus"), testIn = $("lab-test-in"), wordsEl = $("lab-words"), pairsEl = $("lab-pairs"), rulesEl = $("lab-rules");
+    var totalEl = $("lab-total"), vsizeEl = $("lab-vsize"), mEl = $("lab-merges"), outEl = $("lab-test-out"), metaEl = $("lab-test-meta");
+    var statusEl = $("lab-status"), narr = $("lab-narr");
+    var bAuto1 = $("lab-auto1"), bAll = $("lab-autoall"), bUndo = $("lab-undo"), bReset = $("lab-reset");
+
+    var base = [], merges = [], fresh = null, autoTimer = null;
+
+    function parseCorpus(text) {
+      var m = new Map();
+      text.split(/\s+/).filter(Boolean).forEach(function (w) { m.set(w, (m.get(w) || 0) + 1); });
+      var arr = [];
+      m.forEach(function (f, w) { arr.push({ w: w, f: f }); });
+      return arr;
+    }
+    function segment(word, rules) {
+      var s = Array.from(word);
+      rules.forEach(function (r) {
+        var out = [];
+        for (var i = 0; i < s.length; i++) {
+          if (i < s.length - 1 && s[i] === r[0] && s[i + 1] === r[1]) { out.push(r[0] + r[1]); i++; }
+          else out.push(s[i]);
+        }
+        s = out;
+      });
+      return s;
+    }
+    function current() {
+      return base.map(function (x) { return { w: x.w, f: x.f, syms: segment(x.w, merges) }; });
+    }
+    function countPairs(ws) {
+      var m = new Map();
+      ws.forEach(function (x) {
+        for (var i = 0; i < x.syms.length - 1; i++) {
+          var k = x.syms[i] + SEP + x.syms[i + 1];
+          m.set(k, (m.get(k) || 0) + x.f);
+        }
+      });
+      var list = [], idx = 0;
+      m.forEach(function (v, k) { var p = k.split(SEP); list.push({ a: p[0], b: p[1], count: v, order: idx++ }); });
+      // 同頻取最先出現者（與 FIG 1.2 的 best() 一致）
+      list.sort(function (x, y) { return y.count - x.count || x.order - y.order; });
+      return list;
+    }
+    function total(ws) { return ws.reduce(function (s, x) { return s + x.syms.length * x.f; }, 0); }
+    function vocabSize() {
+      var v = new Set();
+      base.forEach(function (x) { Array.from(x.w).forEach(function (ch) { v.add(ch); }); });
+      merges.forEach(function (r) { v.add(r[0] + r[1]); });
+      return v.size;
+    }
+    function fmtPair(a, b) { return a + " + " + b; }
+
+    function render() {
+      var ws = current(), pairs = countPairs(ws);
+
+      // 語料中的詞
+      wordsEl.innerHTML = "";
+      ws.slice().sort(function (x, y) { return y.f - x.f; }).slice(0, 8).forEach(function (x) {
+        var row = FL.el("div", { class: "bpe-row" }, wordsEl);
+        FL.el("span", { class: "bpe-freq", text: "×" + x.f }, row);
+        var tk = FL.el("span", { class: "bpe-toks" }, row);
+        x.syms.forEach(function (sym) {
+          FL.el("span", { class: "tok" + (fresh && sym === fresh ? " is-new" : ""), text: sym }, tk);
+        });
+      });
+
+      // 配對表
+      pairsEl.innerHTML = "";
+      var top = pairs.slice(0, 8), max = top.length ? top[0].count : 1;
+      top.forEach(function (p, i) {
+        var li = FL.el("li", {}, pairsEl);
+        var btn = FL.el("button", { type: "button", class: "lab-pair" + (i === 0 ? " top" : ""), "aria-label": "合併 " + fmtPair(p.a, p.b) + "，出現 " + p.count + " 次" + (i === 0 ? "（BPE 會選這個）" : "") }, li);
+        FL.el("span", { class: "pp", text: fmtPair(p.a, p.b) }, btn);
+        var b = FL.el("span", { class: "b" }, btn);
+        FL.el("i", { style: "width:" + (p.count / max * 100).toFixed(1) + "%" }, b);
+        FL.el("span", { class: "c", text: p.count }, btn);
+        if (i === 0) FL.el("span", { class: "pick", text: "↑ BPE 會選這個" }, btn);
+        btn.addEventListener("click", function () { stopAuto(); doMerge(p, pairs); });
+      });
+      if (!top.length) FL.el("li", { class: "lab-pairs-empty", text: "沒有可合併的配對：每個詞都已是單一 token。" }, pairsEl);
+
+      // 規則清單
+      rulesEl.innerHTML = "";
+      merges.forEach(function (r, i) {
+        FL.el("li", { class: i === merges.length - 1 ? "latest" : "", text: fmtPair(r[0], r[1]) + " → " + r[0] + r[1] }, rulesEl);
+      });
+      if (!merges.length) FL.el("li", { class: "lab-rules-empty", text: "尚未合併——目前詞彙表只有單一字元。" }, rulesEl);
+      rulesEl.scrollTop = rulesEl.scrollHeight;
+
+      FL.ticker(totalEl, total(ws), { digits: 0 });
+      FL.ticker(vsizeEl, vocabSize(), { digits: 0 });
+      FL.ticker(mEl, merges.length, { digits: 0 });
+
+      bAuto1.disabled = bAll.disabled = !pairs.length || !!autoTimer;
+      bUndo.disabled = !merges.length || !!autoTimer;
+      renderTest();
+    }
+
+    function renderTest() {
+      var words = testIn.value.split(/\s+/).filter(Boolean);
+      outEl.innerHTML = "";
+      var n = 0, chars = 0;
+      words.forEach(function (w) {
+        var g = FL.el("span", { class: "lab-wg" }, outEl);
+        chars += Array.from(w).length;
+        segment(w, merges).forEach(function (t) {
+          n++;
+          FL.el("span", { class: "tok" + (Array.from(t).length > 1 ? " merged" : ""), text: t }, g);
+        });
+      });
+      var goal = chars / 2;
+      metaEl.innerHTML = "字元 <b>" + chars + "</b> · token <b>" + n + "</b> · 目標 &lt; <b>" + (goal % 1 ? goal.toFixed(1) : goal) + "</b> · 已用合併 <b>" + merges.length + "</b> / " + LIMIT;
+      statusEl.className = "lab-status";
+      if (!chars) statusEl.textContent = "";
+      else if (n < goal && merges.length <= LIMIT) { statusEl.textContent = "✓ 完成"; statusEl.classList.add("done"); }
+      else if (merges.length > LIMIT) { statusEl.textContent = "已超過 " + LIMIT + " 次，試試復原，改挑更有效的配對"; statusEl.classList.add("over"); }
+      else statusEl.textContent = "";
+    }
+
+    function doMerge(p, pairs) {
+      var before = total(current());
+      merges.push([p.a, p.b]);
+      fresh = p.a + p.b;
+      var after = total(current());
+      var best = pairs[0];
+      if (best && (best.a !== p.a || best.b !== p.b) && p.count < best.count) {
+        narr.innerHTML = "你選了「" + fmtPair(p.a, p.b) + "」（" + p.count + " 次），BPE 會選「" + fmtPair(best.a, best.b) + "」（" + best.count + " 次）。這不算錯，只是得到另一套分詞器。BPE 很<b>貪婪</b>：每一步都挑最高頻的配對，讓語料 token 數下降最多。這一步少了 <b>" + (before - after) + "</b> 個，選它大約會少 " + best.count + " 個。";
+      } else {
+        narr.innerHTML = "合併「" + fmtPair(p.a, p.b) + "」→「<b>" + p.a + p.b + "</b>」：它在語料中出現 " + p.count + " 次，語料 token 總數從 " + before + " 降到 <b>" + after + "</b>。";
+      }
+      render();
+    }
+    function autoOnce() {
+      var pairs = countPairs(current());
+      if (!pairs.length) { narr.innerHTML = "沒有可以合併的配對了：每個詞都已經是單一 token。"; return false; }
+      doMerge(pairs[0], pairs);
+      return true;
+    }
+    function stopAuto() {
+      if (!autoTimer) return;
+      clearInterval(autoTimer); autoTimer = null;
+      bAll.textContent = "自動合併到底";
+      render();
+    }
+    function autoAll() {
+      if (autoTimer) { stopAuto(); return; }
+      var done = 0;
+      if (FL.reducedMotion()) {
+        while (done < AUTO_MAX && autoOnce()) done++;
+        narr.innerHTML += " 共自動合併了 <b>" + done + "</b> 次。";
+        return;
+      }
+      bAll.textContent = "停止";
+      autoTimer = setInterval(function () {
+        if (done >= AUTO_MAX || !countPairs(current()).length) {
+          stopAuto();
+          narr.innerHTML = "自動合併結束：共 <b>" + merges.length + "</b> 條規則，詞彙表 " + vocabSize() + " 個 token。高頻詞多半已整個變成單一 token。";
+          return;
+        }
+        autoOnce(); done++;
+        bAll.disabled = false;
+      }, 280);
+      bAll.disabled = false;
+    }
+
+    function load(resetText) {
+      stopAuto();
+      if (resetText) { corpusIn.value = DEFAULT_CORPUS; testIn.value = DEFAULT_TEST; }
+      base = parseCorpus(corpusIn.value);
+      merges = []; fresh = null;
+      render();
+    }
+
+    bAuto1.addEventListener("click", function () { stopAuto(); autoOnce(); });
+    bAll.addEventListener("click", autoAll);
+    bUndo.addEventListener("click", function () {
+      stopAuto();
+      var r = merges.pop();
+      fresh = null;
+      if (r) narr.innerHTML = "復原：移除規則「" + fmtPair(r[0], r[1]) + "」，它合出的 token 又拆回兩半。";
+      render();
+    });
+    bReset.addEventListener("click", function () {
+      load(true);
+      narr.innerHTML = "已重設語料與測試句。每個詞先拆成單一字元；右邊列出最常相鄰出現的配對，<b>點任何一對</b>就把它合併成新 token。";
+    });
+    var debounce;
+    corpusIn.addEventListener("input", function () {
+      clearTimeout(debounce);
+      debounce = setTimeout(function () {
+        load(false);
+        narr.innerHTML = "語料改變了：合併規則已清空，從單一字元重新開始。";
+      }, 300);
+    });
+    testIn.addEventListener("input", renderTest);
+
+    load(true);
+    narr.innerHTML = "每個詞先拆成單一字元。右邊列出目前最常相鄰出現的配對，<b>點任何一對</b>就把它合併成新 token；也可以按「自動合併一次」讓 BPE 替你挑。";
+  })();
+
+  /* =========================================================
+     FIG 1.4 — 即時分詞器（迷你詞彙表 + 最長匹配 + 位元組退回）
      ========================================================= */
   (function live() {
-    var plate = document.getElementById("fig-1-3");
+    var plate = document.getElementById("fig-1-4");
     var input = document.getElementById("tk-input"), out = document.getElementById("tk-out"), ids = document.getElementById("tk-ids"), narr = document.getElementById("tk-narr");
     var rChars = document.getElementById("tk-chars"), rCount = document.getElementById("tk-count"), rRatio = document.getElementById("tk-ratio"), rBytes = document.getElementById("tk-bytes");
 
