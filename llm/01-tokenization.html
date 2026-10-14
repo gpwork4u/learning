@@ -1,0 +1,598 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>分詞 · LLM 理論 · 圖解手記</title>
+<meta name="description" content="用可操作的圖版理解 Tokenization：文字如何被切成 token、BPE 如何長出詞彙表、為什麼 token 數決定成本。">
+<script>try{var t=localStorage.getItem("fl-theme");if(t)document.documentElement.setAttribute("data-theme",t)}catch(e){}</script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,300..700;1,9..144,400&family=JetBrains+Mono:wght@400;500;600&family=Noto+Sans+TC:wght@400;500;700&family=Noto+Serif+TC:wght@700&display=swap">
+<link rel="stylesheet" href="../assets/css/site.css">
+<style>
+  /* ---- 本章圖版樣式 ---- */
+  @keyframes tok-in { from { clip-path: inset(0 50% 0 50%); opacity: .2; } to { clip-path: inset(0 0 0 0); opacity: 1; } }
+  .tok { transition: background var(--dur-2) linear, border-color var(--dur-2) linear; }
+  .tok .sp { color: var(--text-faint); }
+
+  /* FIG 1.1 三種切法 */
+  .cmp { display: grid; border-top: 1px solid var(--rule-strong); }
+  .cmp-row { display: grid; grid-template-columns: 11em minmax(0, 1fr) 5.5em; gap: var(--s-4); align-items: start; padding: var(--s-4) 0; border-bottom: 1px solid var(--rule); }
+  .cmp-lab b { display: block; font-size: .95rem; }
+  .cmp-lab .meta-label { text-transform: none; letter-spacing: .02em; }
+  .cmp-toks { display: flex; flex-wrap: wrap; gap: 4px; min-width: 0; }
+  .cmp-toks .tok { opacity: 0; clip-path: inset(0 50% 0 50%); }
+  .cmp.is-in .cmp-toks .tok { animation: tok-in var(--dur-3) var(--ease-out) forwards; animation-delay: calc(var(--i) * 28ms); }
+  .cmp-n { text-align: right; }
+  .cmp-n .n { display: block; font: 600 1.6rem/1 var(--f-display); font-variant-numeric: tabular-nums; }
+  .cmp-bar { grid-column: 2 / 4; height: 3px; background: var(--surface-sunken); position: relative; margin-top: calc(var(--s-2) * -1); }
+  .cmp-bar i { position: absolute; inset: 0 auto 0 0; background: var(--accent); width: 0; transition: width var(--dur-3) var(--ease-out); }
+  .tok.oov { border-style: dashed; border-color: var(--data-k); color: var(--data-k); background: var(--data-k-soft); }
+  @media (max-width: 640px) {
+    .cmp-row { grid-template-columns: minmax(0, 1fr) auto; }
+    .cmp-toks { grid-column: 1 / -1; grid-row: 2; }
+    .cmp-bar { grid-column: 1 / -1; }
+  }
+
+  /* FIG 1.2 BPE */
+  .bpe-stats { display: flex; flex-wrap: wrap; gap: var(--s-2) var(--s-6); margin: 0 0 var(--s-4); padding: 0 0 var(--s-3); border-bottom: 1px solid var(--rule); }
+  .bpe-stats div { display: grid; gap: 2px; }
+  .bpe-stats .v { font: 600 1.5rem/1 var(--f-display); font-variant-numeric: tabular-nums; }
+  .bpe-corpus { display: grid; gap: var(--s-3); }
+  .bpe-row { display: grid; grid-template-columns: 3em minmax(0, 1fr); gap: var(--s-3); align-items: center; }
+  .bpe-freq { font: 600 .82rem var(--f-mono); color: var(--text-muted); text-align: right; }
+  .bpe-toks { display: flex; flex-wrap: wrap; gap: 4px; }
+  .tok.is-new { border-color: var(--accent); background: var(--accent-soft); animation: tok-in var(--dur-3) var(--ease-out); }
+  .tok.pair-next { background: var(--data-hi-soft); border-style: dashed; }
+  .bpe-side { display: grid; gap: var(--s-5); }
+  .pair-list { list-style: none; margin: var(--s-2) 0 0; padding: 0; display: grid; gap: 6px; }
+  .pair-list li { display: grid; grid-template-columns: 7em 1fr 2em; gap: var(--s-2); align-items: center; font: 500 .8rem var(--f-mono); }
+  .pair-list .b { height: 8px; background: var(--surface-sunken); position: relative; }
+  .pair-list .b i { position: absolute; inset: 0 auto 0 0; background: var(--text-muted); transition: width var(--dur-3) var(--ease-out); }
+  .pair-list li.top { color: var(--accent); }
+  .pair-list li.top .b i { background: var(--data-hi); }
+  .pair-list .c { text-align: right; font-variant-numeric: tabular-nums; }
+  .vocab { display: flex; flex-wrap: wrap; gap: 4px; margin-top: var(--s-2); }
+  .vocab .tok { font-size: .76rem; padding: 1px 6px; }
+  .vocab .tok.merged { border-color: var(--accent); }
+
+  /* FIG 1.3 即時分詞器 */
+  .tk-input-row { display: grid; gap: var(--s-3); margin-bottom: var(--s-4); }
+  .tk-out { display: flex; flex-wrap: wrap; gap: 4px; min-height: 3em; align-content: flex-start; }
+  .tk-out .tok { display: inline-grid; justify-items: center; gap: 0; padding: 3px 7px 2px; line-height: 1.25; }
+  .tk-out .tok small { font-size: .62rem; color: var(--text-muted); }
+  .tk-out .c0 { background: var(--data-q-soft); }
+  .tk-out .c1 { background: var(--data-k-soft); }
+  .tk-out .c2 { background: var(--data-v-soft); }
+  .tk-out .c3 { background: var(--data-hi-soft); }
+  .tk-out .tok.byte { border-style: dashed; background: transparent; color: var(--text-muted); }
+  .tk-out.anim .tok { animation: tok-in var(--dur-2) var(--ease-out) backwards; animation-delay: calc(var(--i) * 22ms); }
+  .tk-ids { margin: var(--s-4) 0 0; padding-top: var(--s-3); border-top: 1px dashed var(--rule); font: 500 .8rem/1.7 var(--f-mono); color: var(--text-muted); word-break: break-all; }
+  .tk-ids b { color: var(--text); font-weight: 600; }
+  .seg-wrap { overflow-x: auto; max-width: 100%; }
+</style>
+</head>
+<body data-track="llm" data-chapter="01">
+<a class="skip-link" href="#main">跳到主要內容</a>
+<header class="masthead"><div class="masthead-inner">
+  <a class="brand" href="../index.html">
+    <svg class="brand-mark" viewBox="0 0 26 26" aria-hidden="true"><rect class="bm-frame" x="1" y="1" width="24" height="24"/><path class="bm-line" d="M1 19 L9 12 L15 16 L25 6"/><circle class="bm-dot" cx="15" cy="16" r="2.6"/></svg>
+    <span class="brand-name">圖解手記<small>Visual Field Notes</small></span>
+  </a>
+  <nav class="site-nav" aria-label="主要">
+    <a href="../index.html#categories" class="nav-optional">分類</a>
+    <a href="index.html" class="is-current">LLM 理論</a>
+    <a href="../preview.html" class="nav-optional">元件</a>
+  </nav>
+  <button class="theme-toggle" type="button" aria-label="切換主題"><svg viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="6"/><path d="M8 2a6 6 0 0 0 0 12z" fill="currentColor"/></svg></button>
+</div></header>
+
+<main id="main" class="page">
+  <ol class="crumbs">
+    <li><a href="../index.html">圖解手記</a></li>
+    <li><a href="index.html">01 LLM 理論</a></li>
+    <li aria-current="page">第 01 章</li>
+  </ol>
+
+  <header class="chapter-head">
+    <p class="chapter-num" aria-hidden="true">0<span class="num-accent">1</span></p>
+    <div>
+      <p class="meta-label">LLM 理論 · 第 01 章</p>
+      <h1 class="chapter-title">分詞<span class="en">Tokenization</span></h1>
+      <p class="chapter-deck">模型看不懂文字，只看得懂整數。在任何「理解」發生之前，文字必須先被切成一個個 token、再換成編號。這一章看三件事：該切多細、BPE 怎麼自己長出詞彙表，以及 token 數為什麼直接決定成本。</p>
+      <ul class="chapter-meta">
+        <li>閱讀 <b>10 分鐘</b></li>
+        <li>互動圖版 <b>3</b></li>
+        <li>先備 <b>無</b></li>
+      </ul>
+    </div>
+  </header>
+
+  <div class="chapter-body">
+    <aside class="rail" aria-label="本章導覽">
+      <div class="rail-inner">
+        <div>
+          <p class="meta-label">本章目錄</p>
+          <ol class="toc"></ol>
+        </div>
+        <div class="rail-figs-wrap">
+          <p class="meta-label">圖版</p>
+          <ul class="rail-figs"></ul>
+        </div>
+      </div>
+    </aside>
+
+    <article class="prose">
+      <h2 id="why-tokens"><span class="sec">§ 1.1</span>模型只認得數字</h2>
+      <p class="lede">神經網路的輸入是一串向量，而向量要從一張查找表裡取出來——所以文字得先變成「第幾號」。問題是：要以什麼為單位編號？</p>
+      <p>最直覺的兩種做法各有致命傷。<strong>以字元切</strong>，詞彙表很小、永遠不會遇到不認識的字，但序列會變得很長，模型得花大量運算去重新拼出「字」的概念。<strong>以單字切</strong>，序列很短，但詞彙表會膨脹到上百萬，而且只要遇到新詞、錯字或專有名詞，就只能標成 <code>[UNK]</code>（未知）。</p>
+      <p>現代 LLM 幾乎都選擇中間路線：<span class="term" title="Subword">子詞</span>（subword）。常見的詞整個收進詞彙表，罕見的詞拆成幾個常見片段，最壞情況退回單一位元組——既不會遇到未知字，序列也不會太長。</p>
+
+      <figure class="plate" id="fig-1-1" tabindex="-1">
+        <div class="plate-head">
+          <span class="plate-fig">FIG 1.1</span>
+          <h3 class="plate-title">同一句話，三種切法</h3>
+          <span class="plate-hint">切換語言</span>
+        </div>
+        <div class="plate-stage">
+          <div class="cmp" id="cmp"></div>
+        </div>
+        <div class="plate-controls">
+          <div class="seg" role="group" aria-label="切換例句">
+            <button type="button" aria-pressed="true" data-lang="en">English</button>
+            <button type="button" aria-pressed="false" data-lang="zh">中文</button>
+          </div>
+          <span class="spacer"></span>
+          <ul class="legend"><li style="--c:var(--accent)"><i></i>序列長度</li><li style="--c:var(--data-k)"><i></i>未知詞 [UNK]</li></ul>
+        </div>
+        <p class="plate-narr" id="cmp-narr"></p>
+        <p class="plate-cap">子詞切法取自常見 BPE 分詞器的典型結果，實際切點會因模型而異。詞彙表大小為數量級示意。</p>
+      </figure>
+
+      <h2 id="bpe"><span class="sec">§ 1.2</span>BPE：讓詞彙表自己長出來</h2>
+      <p>子詞詞彙表不是人工編的，而是從語料「統計」出來的。最常見的演算法是 <strong>BPE</strong>（Byte Pair Encoding，位元組對編碼），GPT 系列與 Llama 都使用它的變體。規則只有一條，反覆執行：</p>
+      <ol>
+        <li>把所有詞拆成最小單位（字元或位元組），作為初始詞彙表。</li>
+        <li>數一數語料中<strong>哪一對相鄰符號最常一起出現</strong>。</li>
+        <li>把這一對合併成一個新符號，加進詞彙表。</li>
+        <li>回到第 2 步，直到詞彙表達到預設大小。</li>
+      </ol>
+      <p>下面的圖版真的在瀏覽器裡執行這個演算法。注意兩件事：每次合併後語料的 token 總數都在下降，而高頻的整個詞（像 newer）最終會變成單一 token。</p>
+
+      <figure class="plate" id="fig-1-2" tabindex="-1">
+        <div class="plate-head">
+          <span class="plate-fig">FIG 1.2</span>
+          <h3 class="plate-title">在小語料上逐步執行 BPE 合併</h3>
+          <span class="plate-hint">← → 鍵切換步驟</span>
+        </div>
+        <div class="plate-stage">
+          <div class="stage-split">
+            <div>
+              <div class="bpe-stats">
+                <div><span class="meta-label">語料 token 總數</span><span class="v" id="bpe-total">0</span></div>
+                <div><span class="meta-label">詞彙表大小</span><span class="v" id="bpe-vsize">0</span></div>
+                <div><span class="meta-label">已合併</span><span class="v" id="bpe-merges">0</span></div>
+              </div>
+              <div class="bpe-corpus" id="bpe-corpus"></div>
+            </div>
+            <div class="bpe-side">
+              <div>
+                <p class="meta-label">相鄰配對頻次</p>
+                <ul class="pair-list" id="bpe-pairs"></ul>
+              </div>
+              <div>
+                <p class="meta-label">詞彙表</p>
+                <div class="vocab" id="bpe-vocab"></div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="plate-controls">
+          <button class="btn btn-ghost btn-sm" type="button" data-step="prev" aria-label="上一步"><svg viewBox="0 0 14 14"><path d="M9 2 4 7l5 5"/></svg></button>
+          <button class="btn btn-primary btn-sm" type="button" data-step="play" aria-pressed="false"><svg viewBox="0 0 14 14"><path d="M4 2.5v9l7-4.5z" fill="currentColor"/></svg><span class="lbl">播放</span></button>
+          <button class="btn btn-ghost btn-sm" type="button" data-step="next" aria-label="下一步"><svg viewBox="0 0 14 14"><path d="m5 2 5 5-5 5"/></svg></button>
+          <ol class="steps"></ol>
+          <span class="step-count"></span>
+          <span class="spacer"></span>
+          <button class="btn btn-ghost btn-sm" type="button" data-step="reset">重設</button>
+        </div>
+        <p class="plate-narr"></p>
+        <p class="plate-cap">語料為 low ×5、lower ×2、lowest ×2、newer ×6、wider ×3。虛線底色是「下一步要合併」的配對；朱紅框是剛合併出的新 token。頻次相同時取最先出現的配對。</p>
+      </figure>
+
+      <div class="note">
+        <span class="meta-label">註</span>
+        <p>實務上的 BPE 從 256 個<strong>位元組</strong>出發（byte-level BPE），所以任何語言、任何 emoji 都能被表示，永遠不會有未知字。GPT-2 的詞彙表約 5 萬個 token，近年的模型則常見 10 萬到 20 萬。</p>
+      </div>
+
+      <h2 id="vocab-ids"><span class="sec">§ 1.3</span>Token、ID 與詞彙表</h2>
+      <p>訓練好的分詞器就是一張<strong>詞彙表</strong>加上一份合併規則。每個 token 對應一個整數 ID，模型真正收到的是這串 ID；在第 02 章，每個 ID 會再被換成一個嵌入向量。</p>
+      <p>幾個常讓人意外的細節：空白通常黏在下一個詞的前面（「␣model」和「model」是兩個不同的 token）；大小寫不同也是不同 token；詞彙表沒收錄的字會退回位元組，一個中文字在 UTF-8 裡佔 3 個位元組，最壞就變成 3 個 token。</p>
+
+      <figure class="plate" id="fig-1-3" tabindex="-1">
+        <div class="plate-head">
+          <span class="plate-fig">FIG 1.3</span>
+          <h3 class="plate-title">輸入任何文字，看它被切成哪些 token</h3>
+          <span class="plate-hint">直接輸入</span>
+        </div>
+        <div class="plate-stage">
+          <div class="stage-split">
+            <div>
+              <div class="tk-input-row">
+                <label class="vh" for="tk-input">輸入要分詞的文字</label>
+                <input class="text-input" id="tk-input" type="text" maxlength="160" autocomplete="off" spellcheck="false">
+              </div>
+              <div class="tk-out" id="tk-out"></div>
+              <p class="tk-ids" id="tk-ids"></p>
+            </div>
+            <div class="readout">
+              <p class="meta-label">統計</p>
+              <dl>
+                <dt>字元數</dt><dd id="tk-chars">0</dd>
+                <dt>Token 數</dt><dd id="tk-count">0</dd>
+                <dt>字元 / token</dt><dd id="tk-ratio">0</dd>
+                <dt>位元組 token</dt><dd id="tk-bytes">0</dd>
+              </dl>
+            </div>
+          </div>
+        </div>
+        <div class="plate-controls">
+          <div class="seg-wrap">
+            <div class="seg" role="group" aria-label="範例文字">
+              <button type="button" aria-pressed="true" data-preset="0">英文</button>
+              <button type="button" aria-pressed="false" data-preset="1">中文</button>
+              <button type="button" aria-pressed="false" data-preset="2">中英混合</button>
+              <button type="button" aria-pressed="false" data-preset="3">冷僻字</button>
+            </div>
+          </div>
+          <span class="spacer"></span>
+          <ul class="legend"><li style="--c:var(--text-muted)"><i></i>虛線＝位元組退回</li></ul>
+        </div>
+        <p class="plate-narr" id="tk-narr"></p>
+        <p class="plate-cap">這是一個內建約兩百個 token 的迷你分詞器，以「最長匹配」切分，ID 為示意編號；真實分詞器的詞彙表大上數百倍，切法也會不同，但現象一致。</p>
+      </figure>
+
+      <h2 id="cost"><span class="sec">§ 1.4</span>為什麼 token 數很重要</h2>
+      <p>對 LLM 來說，token 是一切的計量單位：</p>
+      <ul>
+        <li><strong>成本</strong>——API 依輸入與輸出的 token 數計費。</li>
+        <li><strong>上下文長度</strong>——「128K 上下文」指的是 12.8 萬個 token，不是字數。</li>
+        <li><strong>速度</strong>——模型一次生成一個 token（第 05 章），輸出越多 token 越慢。</li>
+        <li><strong>運算量</strong>——注意力的計算量隨序列長度平方成長（第 03 章）。</li>
+      </ul>
+      <div class="formula">
+        費用 ≈ 輸入 tokens × 輸入單價 + 輸出 tokens × 輸出單價<br>
+        <span class="cmt">// 英文經驗值：1 個 token ≈ 4 個字元 ≈ 0.75 個英文單字</span>
+      </div>
+      <p>這也解釋了中英文的效率差異。分詞器的語料若以英文為主，英文常用詞多半一個 token 就搞定，中文卻可能一個字一個 token，甚至被拆成位元組。同樣的意思，中文可能要用更多 token——也就是更貴、更快把上下文塞滿。新一代分詞器擴大了多語詞彙，差距已明顯縮小，但仍因模型而異。</p>
+      <div class="note">
+        <span class="meta-label">註</span>
+        <p>分詞也解釋了 LLM 的一些「怪」行為：問它 strawberry 有幾個 r 常會答錯，因為模型看到的是「str」「aw」「berry」這類片段的 ID，而不是一個個字母。</p>
+      </div>
+
+      <h2 id="recap"><span class="sec">§ 1.5</span>本章重點</h2>
+      <ol class="takeaways">
+        <li>模型只處理整數 ID；分詞器負責把文字切成 token 並編號。</li>
+        <li>字元級序列太長、單字級詞彙表太大且有未知詞，子詞是兩者的折衷。</li>
+        <li>BPE 反覆合併最常見的相鄰配對，從語料統計出詞彙表。</li>
+        <li>byte-level BPE 以位元組為底，任何文字都能表示，代價是罕見字會變成多個 token。</li>
+        <li>成本、上下文長度與生成速度都以 token 計，同樣內容在不同語言下的 token 數可能差很多。</li>
+      </ol>
+
+      <nav class="pager" data-auto aria-label="章節翻頁"></nav>
+    </article>
+  </div>
+</main>
+
+<footer class="site-foot"><div class="site-foot-inner">
+  <p>圖解手記 · Visual Field Notes</p>
+  <p>圖版數值為教學示意</p>
+</div></footer>
+
+<script src="../assets/js/catalog.js"></script>
+<script src="../assets/js/site.js"></script>
+<script>
+(function () {
+  "use strict";
+  var E = FL.el;
+
+  function showSpace(el, text) {
+    // 前導空白以 ␣ 顯示
+    if (text.charAt(0) === " ") {
+      E("span", { class: "sp", text: "␣" }, el);
+      el.appendChild(document.createTextNode(text.slice(1)));
+    } else el.appendChild(document.createTextNode(text));
+  }
+
+  /* =========================================================
+     FIG 1.1 — 三種切法對照
+     ========================================================= */
+  (function compare() {
+    var plate = document.getElementById("fig-1-1");
+    var box = document.getElementById("cmp"), narr = document.getElementById("cmp-narr");
+    var DATA = {
+      en: {
+        text: "Unbelievable tokenizers!",
+        rows: [
+          { name: "字元級", vocab: "詞彙表 ≈ 256（位元組）", toks: "Unbelievable tokenizers!".split("") },
+          { name: "子詞（BPE）", vocab: "詞彙表 ≈ 5 萬–20 萬", toks: ["Un", "believ", "able", " token", "izers", "!"] },
+          { name: "單字級", vocab: "詞彙表 > 100 萬，仍有未知詞", toks: ["Unbelievable", "[UNK]", "!"], oov: { 1: "tokenizers" } }
+        ],
+        narr: "字元級要 <b>24</b> 個 token；單字級只要 3 個，但「tokenizers」不在詞彙表裡，只能變成 <b>[UNK]</b>，意思就丟了。子詞用 <b>6</b> 個 token 拼出整句，沒有任何資訊損失。"
+      },
+      zh: {
+        text: "大型語言模型很強大",
+        rows: [
+          { name: "字元級", vocab: "常用漢字就有數千個", toks: "大型語言模型很強大".split("") },
+          { name: "子詞（BPE）", vocab: "詞彙表 ≈ 5 萬–20 萬", toks: ["大型", "語言", "模型", "很", "強大"] },
+          { name: "單字級", vocab: "需先斷詞，詞彙表龐大", toks: ["大型", "語言模型", "很", "強大"] }
+        ],
+        narr: "中文沒有空白分隔，「單字級」必須先跑一次<b>斷詞</b>，而且斷法見仁見智。子詞切法直接從語料學出「語言」「模型」這些常見片段，不需要額外的斷詞器。"
+      }
+    };
+    var lang = "en";
+
+    var seen = false;
+    function render() {
+      var d = DATA[lang];
+      box.innerHTML = "";
+      box.classList.remove("is-in");
+      var max = Math.max.apply(null, d.rows.map(function (r) { return r.toks.length; }));
+      var bars = [];
+      d.rows.forEach(function (r) {
+        var row = E("div", { class: "cmp-row" }, box);
+        var lab = E("div", { class: "cmp-lab" }, row);
+        E("b", { text: r.name }, lab);
+        E("span", { class: "meta-label", text: r.vocab }, lab);
+        var toks = E("div", { class: "cmp-toks" }, row);
+        r.toks.forEach(function (t, i) {
+          var c = E("span", { class: "tok" + (r.oov && r.oov[i] ? " oov" : ""), style: "--i:" + i }, toks);
+          if (r.oov && r.oov[i]) c.title = "「" + r.oov[i] + "」不在詞彙表中";
+          if (t === " ") E("span", { class: "sp", text: "␣" }, c); else showSpace(c, t);
+        });
+        var n = E("div", { class: "cmp-n" }, row);
+        E("span", { class: "n", text: r.toks.length }, n);
+        E("span", { class: "meta-label", text: "tokens" }, n);
+        var bar = E("div", { class: "cmp-bar", "aria-hidden": "true" }, row);
+        bars.push([E("i", {}, bar), r.toks.length / max]);
+      });
+      narr.innerHTML = d.narr;
+      if (!seen) return;
+      requestAnimationFrame(function () {
+        requestAnimationFrame(function () {
+          box.classList.add("is-in");
+          bars.forEach(function (b) { b[0].style.width = (b[1] * 100).toFixed(1) + "%"; });
+        });
+      });
+    }
+
+    plate.querySelectorAll("[data-lang]").forEach(function (b) {
+      b.addEventListener("click", function () {
+        lang = b.dataset.lang;
+        plate.querySelectorAll("[data-lang]").forEach(function (x) { x.setAttribute("aria-pressed", x === b ? "true" : "false"); });
+        render();
+      });
+    });
+    render();
+    FL.inView(plate, function () { seen = true; render(); }, { threshold: 0.2 });
+  })();
+
+  /* =========================================================
+     FIG 1.2 — BPE 逐步合併（瀏覽器內真實計算）
+     ========================================================= */
+  (function bpe() {
+    var plate = document.getElementById("fig-1-2");
+    var CORPUS = [["low", 5], ["lower", 2], ["lowest", 2], ["newer", 6], ["wider", 3]];
+    var MERGES = 8, SEP = "\u0001";
+
+    function countPairs(words) {
+      var m = new Map();
+      words.forEach(function (w) {
+        for (var i = 0; i < w.syms.length - 1; i++) {
+          var k = w.syms[i] + SEP + w.syms[i + 1];
+          m.set(k, (m.get(k) || 0) + w.f);
+        }
+      });
+      return m;
+    }
+    function best(m) {
+      var bk = null, bv = 0;
+      m.forEach(function (v, k) { if (v > bv) { bv = v; bk = k; } });
+      if (!bk) return null;
+      var p = bk.split(SEP);
+      return { a: p[0], b: p[1], count: bv };
+    }
+    function merge(words, a, b) {
+      return words.map(function (w) {
+        var out = [], fresh = [];
+        for (var i = 0; i < w.syms.length; i++) {
+          if (i < w.syms.length - 1 && w.syms[i] === a && w.syms[i + 1] === b) { out.push(a + b); fresh.push(out.length - 1); i++; }
+          else out.push(w.syms[i]);
+        }
+        return { syms: out, f: w.f, fresh: fresh };
+      });
+    }
+
+    // 預先算出每一步的狀態
+    var base = [];
+    CORPUS.forEach(function (c) { c[0].split("").forEach(function (ch) { if (base.indexOf(ch) < 0) base.push(ch); }); });
+    var words = CORPUS.map(function (c) { return { syms: c[0].split(""), f: c[1], fresh: [] }; });
+    var states = [];
+    var vocab = base.slice();
+    for (var s = 0; s <= MERGES; s++) {
+      var pairs = countPairs(words);
+      var nx = best(pairs);
+      states.push({ words: words, vocab: vocab.slice(), pairs: pairs, next: nx, merged: s > 0 ? states[s - 1].next : null });
+      if (!nx || s === MERGES) break;
+      words = merge(words, nx.a, nx.b);
+      vocab.push(nx.a + nx.b);
+    }
+
+    var corpusEl = document.getElementById("bpe-corpus"), pairsEl = document.getElementById("bpe-pairs"), vocabEl = document.getElementById("bpe-vocab");
+    var totalEl = document.getElementById("bpe-total"), vsizeEl = document.getElementById("bpe-vsize"), mEl = document.getElementById("bpe-merges");
+
+    function render(i) {
+      var st = states[i];
+      corpusEl.innerHTML = "";
+      st.words.forEach(function (w) {
+        var row = E("div", { class: "bpe-row" }, corpusEl);
+        E("span", { class: "bpe-freq", text: "×" + w.f }, row);
+        var tk = E("div", { class: "bpe-toks" }, row);
+        var nextMark = {};
+        if (st.next) for (var j = 0; j < w.syms.length - 1; j++) {
+          if (w.syms[j] === st.next.a && w.syms[j + 1] === st.next.b) { nextMark[j] = nextMark[j + 1] = true; j++; }
+        }
+        w.syms.forEach(function (sym, j) {
+          var cls = "tok";
+          if (i > 0 && w.fresh.indexOf(j) >= 0) cls += " is-new";
+          if (nextMark[j]) cls += " pair-next";
+          E("span", { class: cls, text: sym }, tk);
+        });
+      });
+
+      var list = [];
+      st.pairs.forEach(function (v, k) { list.push([k, v]); });
+      // 穩定排序：頻次高者優先，同頻次保留出現順序
+      list = list.map(function (p, idx) { return [p[0], p[1], idx]; }).sort(function (a, b) { return b[1] - a[1] || a[2] - b[2]; }).slice(0, 6);
+      var maxC = list.length ? list[0][1] : 1;
+      pairsEl.innerHTML = "";
+      list.forEach(function (p, idx) {
+        var li = E("li", { class: idx === 0 ? "top" : "" }, pairsEl);
+        E("span", { text: p[0].split(SEP).join(" + ") }, li);
+        var b = E("span", { class: "b" }, li);
+        E("i", { style: "width:" + (p[1] / maxC * 100).toFixed(1) + "%" }, b);
+        E("span", { class: "c", text: p[1] }, li);
+      });
+
+      vocabEl.innerHTML = "";
+      st.vocab.forEach(function (v, j) {
+        var cls = "tok" + (j >= base.length ? " merged" : "") + (i > 0 && j === st.vocab.length - 1 ? " is-new" : "");
+        E("span", { class: cls, text: v }, vocabEl);
+      });
+
+      var total = st.words.reduce(function (s, w) { return s + w.syms.length * w.f; }, 0);
+      FL.ticker(totalEl, total, { digits: 0 });
+      FL.ticker(vsizeEl, st.vocab.length, { digits: 0 });
+      FL.ticker(mEl, i, { digits: 0 });
+    }
+
+    var steps = states.map(function (st, i) {
+      var nx = st.next, tail = nx ? "目前最常見的相鄰配對是「<b>" + nx.a + " + " + nx.b + "</b>」，出現 " + nx.count + " 次。" : "";
+      if (i === 0) return { narr: "起點：每個詞拆成單一字元，初始詞彙表只有 <b>" + st.vocab.length + "</b> 個符號。" + tail };
+      var m = st.merged;
+      var head = "第 " + i + " 次合併：「" + m.a + "」+「" + m.b + "」→ 新 token「<b>" + m.a + m.b + "</b>」。";
+      if (i === states.length - 1) return { narr: head + "高頻的 <b>newer</b> 已經是單一 token，而罕見的 lowest 仍由好幾個片段組成——這正是子詞想要的效果。" };
+      return { narr: head + tail };
+    });
+
+    FL.stepper(plate, { steps: steps, render: render, autoplay: 2200 });
+  })();
+
+  /* =========================================================
+     FIG 1.3 — 即時分詞器（迷你詞彙表 + 最長匹配 + 位元組退回）
+     ========================================================= */
+  (function live() {
+    var plate = document.getElementById("fig-1-3");
+    var input = document.getElementById("tk-input"), out = document.getElementById("tk-out"), ids = document.getElementById("tk-ids"), narr = document.getElementById("tk-narr");
+    var rChars = document.getElementById("tk-chars"), rCount = document.getElementById("tk-count"), rRatio = document.getElementById("tk-ratio"), rBytes = document.getElementById("tk-bytes");
+
+    var EN = ("the a an is are was of to and in on at it for with as by this that what how you we they I my " +
+      "model models language large learn learns learning token tokens tokenizer tokenization ize ization ing ed er est ly un re able " +
+      "believ low new old hello world cat dog sat mat word words text read write good great fun interest ting very much " +
+      "AI GPT LLM attention transformer embed embedding predict next can not do does").split(" ");
+    var ENCAP = ["The", "Hello", "This", "What", "How", "We", "It", "Un", "Token"];
+    var ZH = ("我們 你們 他們 今天 明天 天氣 學習 大型 語言 模型 分詞 人工 智慧 機器 世界 你好 文字 數字 理解 可以 什麼 因為 所以 " +
+      "問題 時間 電腦 中文 英文 有趣 注意 向量 生成 訓練 資料 " +
+      "的 是 我 你 他 很 在 了 有 不 人 這 一 個 中 大 小 和 也 就 都 要 會 說 好 上 下 字 詞 與 用 看 來 去").split(" ");
+    var ZHPUNCT = ["，", "。"];
+    var vocab = new Set();
+    EN.concat(ENCAP).forEach(function (w) { vocab.add(w); vocab.add(" " + w); });
+    ZH.concat(ZHPUNCT).forEach(function (w) { vocab.add(w); vocab.add(" " + w); });
+    var MAXLEN = 0;
+    vocab.forEach(function (w) { MAXLEN = Math.max(MAXLEN, w.length); });
+
+    function idOf(tok) {
+      if (tok.length === 1 && tok.charCodeAt(0) < 128) return tok.charCodeAt(0);
+      var h = 2166136261;
+      for (var i = 0; i < tok.length; i++) { h ^= tok.charCodeAt(i); h = Math.imul(h, 16777619) >>> 0; }
+      return 256 + (h % 49000);
+    }
+    var enc = new TextEncoder();
+
+    function tokenize(text) {
+      var res = [], i = 0;
+      var chars = Array.from(text);
+      while (i < chars.length) {
+        var found = null;
+        for (var L = Math.min(MAXLEN, chars.length - i); L >= 1; L--) {
+          var piece = chars.slice(i, i + L).join("");
+          if (vocab.has(piece)) { found = piece; break; }
+        }
+        if (found) { res.push({ t: found, id: idOf(found) }); i += Array.from(found).length; continue; }
+        var ch = chars[i];
+        if (ch.charCodeAt(0) < 128) res.push({ t: ch, id: idOf(ch) });
+        else enc.encode(ch).forEach(function (b) {
+          res.push({ t: "<" + b.toString(16).toUpperCase().padStart(2, "0") + ">", id: b, byte: true, of: ch });
+        });
+        i++;
+      }
+      return res;
+    }
+
+    var PRESETS = [
+      "The large language model learns to predict the next token.",
+      "我們今天學習大型語言模型的分詞。",
+      "Hello 世界，tokenizer 很有趣！",
+      "饕餮與魑魅魍魎"
+    ];
+
+    function render(animate) {
+      var text = input.value;
+      var toks = tokenize(text);
+      out.innerHTML = "";
+      out.classList.toggle("anim", !!animate);
+      var color = 0;
+      toks.forEach(function (tk, i) {
+        var c = E("span", { class: "tok" + (tk.byte ? " byte" : " c" + (color++ % 4)), style: "--i:" + i }, out);
+        if (tk.byte) c.title = "「" + tk.of + "」的 UTF-8 位元組";
+        var lbl = E("span", {}, c);
+        showSpace(lbl, tk.t);
+        E("small", { text: tk.id }, c);
+      });
+      if (!toks.length) E("span", { class: "meta-label", text: "（輸入一些文字）" }, out);
+      ids.innerHTML = "模型實際收到 → <b>[" + toks.map(function (t) { return t.id; }).join(", ") + "]</b>";
+
+      var nChars = Array.from(text).length, nBytes = toks.filter(function (t) { return t.byte; }).length;
+      var ratio = toks.length ? nChars / toks.length : 0;
+      FL.ticker(rChars, nChars, { digits: 0, instant: !animate });
+      FL.ticker(rCount, toks.length, { digits: 0, instant: !animate });
+      FL.ticker(rRatio, ratio, { digits: 2, instant: !animate });
+      FL.ticker(rBytes, nBytes, { digits: 0, instant: !animate });
+
+      var msg = "這段文字有 <b>" + nChars + "</b> 個字元，切成 <b>" + toks.length + "</b> 個 token（平均每個 token " + ratio.toFixed(2) + " 個字元）。";
+      if (nBytes) msg += "其中 <b>" + nBytes + "</b> 個是位元組 token——詞彙表沒收錄的字被拆成 UTF-8 位元組，一個中文字就要 3 個。";
+      else if (nChars) msg += "每個片段都在詞彙表裡，沒有退回位元組。";
+      narr.innerHTML = nChars ? msg : "在上方輸入文字，或選一個範例。";
+    }
+
+    var btns = plate.querySelectorAll("[data-preset]");
+    btns.forEach(function (b) {
+      b.addEventListener("click", function () {
+        input.value = PRESETS[+b.dataset.preset];
+        btns.forEach(function (x) { x.setAttribute("aria-pressed", x === b ? "true" : "false"); });
+        render(true);
+      });
+    });
+    input.addEventListener("input", function () {
+      btns.forEach(function (x) { x.setAttribute("aria-pressed", "false"); });
+      render(false);
+    });
+    input.value = PRESETS[0];
+    render(false);
+    FL.inView(plate, function () { render(true); }, { threshold: 0.3 });
+  })();
+})();
+</script>
+</body>
+</html>

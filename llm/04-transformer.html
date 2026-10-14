@@ -1,0 +1,745 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Transformer 區塊 · LLM 理論 · 圖解手記</title>
+<meta name="description" content="用可操作的圖版理解 Transformer 區塊：LayerNorm、多頭注意力、前饋網路與殘差流如何層層堆疊。">
+<script>try{var t=localStorage.getItem("fl-theme");if(t)document.documentElement.setAttribute("data-theme",t)}catch(e){}</script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,300..700;1,9..144,400&family=JetBrains+Mono:wght@400;500;600&family=Noto+Sans+TC:wght@400;500;700&family=Noto+Serif+TC:wght@700&display=swap">
+<link rel="stylesheet" href="../assets/css/site.css">
+<style>
+  /* ---- 本章局部色：殘差流第 5、6 種寫入 ---- */
+  :root { --c-f5: #6B5CA5; --c-f6: #23807F; }
+  @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { --c-f5: #A99BE0; --c-f6: #67C6C4; } }
+  :root[data-theme="dark"] { --c-f5: #A99BE0; --c-f6: #67C6C4; }
+
+
+  .svg-t { font: 500 13px var(--f-body); fill: var(--text); dominant-baseline: central; }
+  .svg-m { font: 600 10.5px var(--f-mono); fill: var(--text-muted); letter-spacing: .06em; dominant-baseline: central; }
+
+  /* FIG 4.1 block */
+  .blk-stage { display: grid; grid-template-columns: minmax(0, 440px) minmax(0, 1fr); gap: var(--s-6); align-items: start; }
+  @media (max-width: 820px) { .blk-stage { grid-template-columns: minmax(0, 1fr); } }
+  #blk-svg { width: 100%; max-width: 440px; height: auto; }
+  .trunk-band { stroke: var(--data-q-soft); stroke-width: 16; stroke-linecap: butt; }
+  .trunk-line { stroke: var(--data-q); stroke-width: 1.5; }
+  .wire { fill: none; stroke: var(--text-muted); stroke-width: 1.2; }
+  .wire-on { fill: none; stroke: var(--accent); stroke-width: 2.6; stroke-linecap: round; stroke-linejoin: round; }
+  .blk rect { fill: var(--surface-page); stroke: var(--rule-strong); stroke-width: 1; transition: fill var(--dur-2) linear, stroke var(--dur-2) linear; }
+  .blk text { text-anchor: middle; }
+  .blk .sub { font: 500 10px var(--f-mono); fill: var(--text-muted); text-anchor: middle; dominant-baseline: central; }
+  .blk.is-on rect { fill: var(--accent-soft); stroke: var(--accent); stroke-width: 2; }
+  .blk.is-dim { opacity: .45; transition: opacity var(--dur-2) linear; }
+  .add circle { fill: var(--surface-raised); stroke: var(--rule-strong); stroke-width: 1.2; transition: stroke var(--dur-2) linear, fill var(--dur-2) linear; }
+  .add path { stroke: var(--text); stroke-width: 1.6; }
+  .add.is-on circle { stroke: var(--accent); fill: var(--accent-soft); stroke-width: 2; }
+  .add-ring { fill: none; stroke: var(--accent); stroke-width: 2; opacity: 0; transform-box: fill-box; transform-origin: center; }
+  .add-ring.go { animation: ring 700ms var(--ease-out); }
+  @keyframes ring { from { opacity: .9; transform: scale(1); } to { opacity: 0; transform: scale(2.4); } }
+  .dot-t { fill: var(--data-q); }
+  .dot-b { fill: var(--accent); transition: opacity var(--dur-1) linear; }
+
+  .inset { display: grid; gap: var(--s-3); }
+  .inset h4 { margin: 0; font: 700 1.02rem/1.4 var(--f-body); }
+  .inset p { margin: 0; font-size: .9rem; color: var(--text-muted); }
+  .inset svg { width: 100%; max-width: 300px; height: auto; }
+  .inset-pane { display: grid; gap: var(--s-3); }
+  .inset .formula { margin: 0; padding: var(--s-3) var(--s-4); font-size: .86rem; }
+
+  /* FIG 4.2 river */
+  .river-stage { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--s-4); }
+  .river-stage .feat-list { grid-template-columns: repeat(auto-fill, minmax(min(100%, 280px), 1fr)); gap: 6px var(--s-5); }
+  .river-g { transition: clip-path var(--dur-3) var(--ease-out); }
+  .band { transition: opacity var(--dur-2) linear; }
+  .band.is-faded { opacity: .28; }
+  .lyr { cursor: pointer; outline: none; }
+  .lyr rect { fill: var(--surface-page); stroke: var(--rule-strong); transition: fill var(--dur-1) linear; }
+  .lyr text { font: 600 11px var(--f-mono); text-anchor: middle; dominant-baseline: central; fill: var(--text); pointer-events: none; }
+  .lyr:hover rect { fill: var(--surface-sunken); }
+  .lyr:focus-visible rect { stroke: var(--focus); stroke-width: 2; }
+  .lyr.is-sel rect { fill: var(--surface-ink); }
+  .lyr.is-sel text { fill: var(--text-on-ink); }
+  .rw-read { stroke: var(--text-muted); stroke-width: 1; stroke-dasharray: 3 3; }
+  .rw-write { stroke-width: 2.2; }
+  .feat-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
+  .feat-list li { display: grid; grid-template-columns: 12px 2.4em 1fr; gap: var(--s-2); align-items: baseline; font-size: .84rem; color: var(--text-muted); }
+  .feat-list li i { width: 12px; height: 12px; background: var(--c); align-self: center; }
+  .feat-list li b { font: 600 .74rem var(--f-mono); color: var(--text-muted); }
+  .feat-list li.is-sel { color: var(--text); font-weight: 700; }
+  .feat-list li.is-off { opacity: .35; }
+
+  /* FIG 4.3 calculator */
+  .calc { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: var(--s-6); align-items: start; }
+  @media (max-width: 820px) { .calc { grid-template-columns: minmax(0, 1fr); } }
+  .calc-fields { display: grid; gap: var(--s-4); }
+  .calc-fields .field { grid-template-columns: 5.6em minmax(0, 1fr) 5.4em; width: 100%; }
+  .big-num { margin: 0; font: 300 clamp(2.6rem, 6vw, 4rem)/1 var(--f-display); font-variant-numeric: tabular-nums; letter-spacing: -.02em; }
+  .big-num small { font: 500 1rem var(--f-mono); color: var(--text-muted); margin-left: var(--s-2); letter-spacing: 0; }
+  .stack-bar { display: flex; height: 18px; background: var(--surface-sunken); margin: var(--s-4) 0 var(--s-2); }
+  .stack-bar span { display: block; height: 100%; transition: width var(--dur-3) var(--ease-out); }
+  .calc-break { margin: 0; display: grid; grid-template-columns: auto 1fr auto; gap: 4px var(--s-3); font-size: .84rem; }
+  .calc-break dt { display: flex; align-items: center; gap: 6px; color: var(--text-muted); }
+  .calc-break dt i { width: 10px; height: 10px; background: var(--c); display: inline-block; }
+  .calc-break dd { margin: 0; font: 500 .82rem var(--f-mono); text-align: right; font-variant-numeric: tabular-nums; }
+  .calc-break .fx { font: 400 .76rem var(--f-mono); color: var(--text-faint); text-align: left; }
+  .calc-cmp { margin: var(--s-4) 0 0; font-size: .88rem; color: var(--text-muted); min-height: 1.6em; }
+  .calc-cmp b { color: var(--text); }
+</style>
+</head>
+<body data-track="llm" data-chapter="04">
+<a class="skip-link" href="#main">跳到主要內容</a>
+<header class="masthead"><div class="masthead-inner">
+  <a class="brand" href="../index.html">
+    <svg class="brand-mark" viewBox="0 0 26 26" aria-hidden="true"><rect class="bm-frame" x="1" y="1" width="24" height="24"/><path class="bm-line" d="M1 19 L9 12 L15 16 L25 6"/><circle class="bm-dot" cx="15" cy="16" r="2.6"/></svg>
+    <span class="brand-name">圖解手記<small>Visual Field Notes</small></span>
+  </a>
+  <nav class="site-nav" aria-label="主要">
+    <a href="../index.html#categories" class="nav-optional">分類</a>
+    <a href="index.html" class="is-current">LLM 理論</a>
+    <a href="../preview.html" class="nav-optional">元件</a>
+  </nav>
+  <button class="theme-toggle" type="button" aria-label="切換主題"><svg viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="6"/><path d="M8 2a6 6 0 0 0 0 12z" fill="currentColor"/></svg></button>
+</div></header>
+
+<main id="main" class="page">
+  <ol class="crumbs">
+    <li><a href="../index.html">圖解手記</a></li>
+    <li><a href="index.html">01 LLM 理論</a></li>
+    <li aria-current="page">第 04 章</li>
+  </ol>
+
+  <header class="chapter-head">
+    <p class="chapter-num" aria-hidden="true">0<span class="num-accent">4</span></p>
+    <div>
+      <p class="meta-label">LLM 理論 · 第 04 章</p>
+      <h1 class="chapter-title">Transformer 區塊<span class="en">The Transformer Block</span></h1>
+      <p class="chapter-deck">注意力只是零件之一。這一章把它裝回整台機器：LayerNorm、多頭注意力、前饋網路，以及貫穿全部的殘差流——再看這個區塊如何被複製數十次、堆成一個大型語言模型。</p>
+      <ul class="chapter-meta">
+        <li>閱讀 <b>14 分鐘</b></li>
+        <li>互動圖版 <b>3</b></li>
+        <li>先備 <b>第 03 章 自注意力</b></li>
+      </ul>
+    </div>
+  </header>
+
+  <div class="chapter-body">
+    <aside class="rail" aria-label="本章導覽">
+      <div class="rail-inner">
+        <div>
+          <p class="meta-label">本章目錄</p>
+          <ol class="toc"></ol>
+        </div>
+        <div class="rail-figs-wrap">
+          <p class="meta-label">圖版</p>
+          <ul class="rail-figs"></ul>
+        </div>
+      </div>
+    </aside>
+
+    <article class="prose">
+      <h2 id="anatomy"><span class="sec">§ 4.1</span>一個區塊裡有什麼</h2>
+      <p class="lede">一個 Transformer 區塊只做兩件事：先讓 token 彼此<strong>交流</strong>（注意力），再讓每個 token 各自<strong>思考</strong>（前饋網路）。兩件事都以「加回去」的方式寫進一條主幹上。</p>
+      <p>每個子層前面都先做一次 <span class="term" title="Layer Normalization">LayerNorm</span>，把向量的數值尺度拉回穩定範圍；子層算完的結果不是取代輸入，而是<strong>加</strong>到輸入上——這條讓原始資訊一路暢通的主幹，就叫<strong>殘差流</strong>。</p>
+
+      <figure class="plate" id="fig-4-1" tabindex="-1">
+        <div class="plate-head">
+          <span class="plate-fig">FIG 4.1</span>
+          <h3 class="plate-title">跟著一個 token 的訊號走過一個區塊</h3>
+          <span class="plate-hint">← → 鍵切換步驟</span>
+        </div>
+        <div class="plate-stage">
+          <div class="blk-stage">
+            <svg id="blk-svg" viewBox="0 0 440 572" role="img" aria-label="Transformer 區塊資料流示意圖"></svg>
+            <div class="inset" aria-live="polite">
+              <p class="meta-label" id="blk-step-label">步驟 01</p>
+              <div class="inset-pane" data-pane="0">
+                <h4>輸入：進入殘差流</h4>
+                <p>每個 token 的向量（嵌入 + 位置資訊）從底部進入。整個區塊都在讀寫這條寬度固定為 d<sub>model</sub> 的主幹。</p>
+                <svg viewBox="0 0 300 60" aria-hidden="true"><g id="inset-x"></g></svg>
+              </div>
+              <div class="inset-pane" data-pane="1" hidden>
+                <h4>LayerNorm：先校準尺度</h4>
+                <p>把向量減去平均、除以標準差，再乘上可學習的縮放。高低不一的數值被拉到相近的範圍，訓練更穩定。</p>
+                <svg viewBox="0 0 300 90" aria-hidden="true"><g id="inset-ln"></g></svg>
+              </div>
+              <div class="inset-pane" data-pane="2" hidden>
+                <h4>多頭注意力：token 之間交流</h4>
+                <p>這是區塊裡<strong>唯一</strong>讓不同位置交換資訊的地方（第 03 章）。每個 token 從其他 token 那裡收集需要的內容。</p>
+                <svg viewBox="0 0 300 90" aria-hidden="true"><g id="inset-mha"></g></svg>
+              </div>
+              <div class="inset-pane" data-pane="3" hidden>
+                <h4>⊕ 殘差相加</h4>
+                <p>注意力的輸出不取代原向量，而是<strong>加</strong>上去：x ← x + Attn(LN(x))。原資訊保留，新資訊疊加。</p>
+                <svg viewBox="0 0 300 70" aria-hidden="true"><g id="inset-add"></g></svg>
+              </div>
+              <div class="inset-pane" data-pane="4" hidden>
+                <h4>LayerNorm：第二次校準</h4>
+                <p>在進入前饋網路前再正規化一次。這種「先正規化再進子層」的寫法叫 <strong>pre-norm</strong>。</p>
+                <svg viewBox="0 0 300 90" aria-hidden="true"><g id="inset-ln2"></g></svg>
+              </div>
+              <div class="inset-pane" data-pane="5" hidden>
+                <h4>前饋網路：各自思考</h4>
+                <p>每個 token <strong>獨立</strong>通過同一個兩層網路：先升維到 4 倍、經過 GELU 非線性，再降回原維度。</p>
+                <svg viewBox="0 0 300 110" aria-hidden="true"><g id="inset-ffn"></g></svg>
+              </div>
+              <div class="inset-pane" data-pane="6" hidden>
+                <h4>⊕ 第二次殘差相加</h4>
+                <p>FFN 的輸出同樣加回主幹：x ← x + FFN(LN(x))。區塊結束時，向量形狀和輸入完全一樣。</p>
+                <svg viewBox="0 0 300 70" aria-hidden="true"><g id="inset-add2"></g></svg>
+              </div>
+              <div class="inset-pane" data-pane="7" hidden>
+                <h4>輸出：交給下一個區塊</h4>
+                <p>因為輸入輸出形狀相同，區塊可以直接堆疊。GPT-2 small 疊 12 次，GPT-3 疊 96 次。</p>
+                <div class="formula">h = x + MHA(LN(x))<br>y = h + FFN(LN(h))</div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="plate-controls">
+          <button class="btn btn-ghost btn-sm" type="button" data-step="prev" aria-label="上一步"><svg viewBox="0 0 14 14"><path d="M9 2 4 7l5 5"/></svg></button>
+          <button class="btn btn-primary btn-sm" type="button" data-step="play" aria-pressed="false"><svg viewBox="0 0 14 14"><path d="M4 2.5v9l7-4.5z" fill="currentColor"/></svg><span class="lbl">播放</span></button>
+          <button class="btn btn-ghost btn-sm" type="button" data-step="next" aria-label="下一步"><svg viewBox="0 0 14 14"><path d="m5 2 5 5-5 5"/></svg></button>
+          <ol class="steps"></ol>
+          <span class="step-count"></span>
+          <span class="spacer"></span>
+          <ul class="legend"><li style="--c:var(--data-q)"><i></i>殘差流主幹</li><li style="--c:var(--accent)"><i></i>子層分支</li></ul>
+          <button class="btn btn-ghost btn-sm" type="button" data-step="reset">重設</button>
+        </div>
+        <p class="plate-narr"></p>
+        <p class="plate-cap">由下往上流動。藍色主幹是殘差流，朱紅色是正在計算的分支。這是 GPT-2 之後主流的 pre-norm 寫法；2017 年原始論文是把 LayerNorm 放在相加之後（post-norm）。</p>
+      </figure>
+
+      <div class="note">
+        <span class="meta-label">註 · pre-norm vs post-norm</span>
+        <p>原始 Transformer 是 <code>x = LN(x + Sublayer(x))</code>。把 LN 移到子層前面（<code>x = x + Sublayer(LN(x))</code>）後，殘差主幹上完全沒有任何運算擋路，深層網路的梯度能直接流回底層，因此幾乎所有現代 LLM 都採用 pre-norm。</p>
+      </div>
+
+      <h2 id="residual"><span class="sec">§ 4.2</span>殘差流：模型的共用記事本</h2>
+      <p>把殘差流想成一條寬度固定的河。每一層都從河裡<strong>讀</strong>出目前的內容，算完後把一點新資訊<strong>寫</strong>回河裡。沒有任何一層會把河水整個換掉——所以第 1 層寫下的東西，第 40 層仍然讀得到。</p>
+      <p>這也解釋了為什麼深層網路訓練得起來：梯度可以沿著「加法」這條捷徑一路傳回最底層，不會在幾十層的非線性中消失。</p>
+
+      <figure class="plate" id="fig-4-2" tabindex="-1">
+        <div class="plate-head">
+          <span class="plate-fig">FIG 4.2</span>
+          <h3 class="plate-title">「它」這個 token 的殘差流，一層一層被寫入</h3>
+          <span class="plate-hint">點擊層 / 拖曳滑桿</span>
+        </div>
+        <div class="plate-stage">
+          <div class="river-stage">
+            <div class="stage-scroll"><svg class="stage-svg" id="river-svg" viewBox="0 0 800 300" role="img" aria-label="殘差流寫入示意圖"></svg></div>
+            <div class="readout">
+              <p class="meta-label" id="river-title">選取的層</p>
+              <ul class="feat-list" id="river-list"></ul>
+            </div>
+          </div>
+          <p class="scroll-hint">← 可橫向捲動 →</p>
+        </div>
+        <div class="plate-controls">
+          <div class="field">
+            <label for="river-n">層群數</label>
+            <input type="range" id="river-n" min="1" max="6" step="1" value="6">
+            <output for="river-n" id="river-n-out">6</output>
+          </div>
+          <span class="spacer"></span>
+          <button class="btn btn-ghost btn-sm" type="button" id="river-play">逐層寫入</button>
+        </div>
+        <p class="plate-narr" id="river-narr"></p>
+        <p class="plate-cap">句子是「貓沒有跳上桌子，因為它太累了」。河道高度固定（d<sub>model</sub> 不會變），色帶比例代表各種資訊在向量中所占的份量；每個 L 代表一群連續的真實層。哪一層寫入哪種資訊是示意，但「淺層偏語法、深層偏語意與預測」是可解釋性研究中常見的趨勢。</p>
+      </figure>
+
+      <h2 id="ffn"><span class="sec">§ 4.3</span>前饋網路：每個 token 的私人思考</h2>
+      <p>注意力負責「蒐集」，前饋網路（FFN，也叫 MLP）負責「加工」。它對每個位置<strong>分別</strong>套用同一個小網路，token 之間在這裡完全不交流：</p>
+      <div class="formula">
+        FFN(<var>x</var>) = <var>W</var>₂ · GELU(<var>W</var>₁<var>x</var> + <var>b</var>₁) + <var>b</var>₂<br>
+        <span class="cmt">// W₁：d → 4d（升維）　W₂：4d → d（降維）</span>
+      </div>
+      <p>一個有用的直覺是把 FFN 看成<strong>鍵值記憶體</strong>：W₁ 的每一列像一把「鍵」，偵測輸入是否符合某種模式（例如「前面提到了法國首都」）；被激活的神經元再透過 W₂ 對應的「值」，把相關知識（「巴黎」）寫回殘差流。模型大部分的事實性知識，被認為就存放在這些 FFN 權重裡。</p>
+      <div class="note">
+        <span class="meta-label">註</span>
+        <p>FFN 的參數量是注意力的兩倍（8d² 對 4d²），所以一個區塊裡大約三分之二的參數都在 FFN。許多新模型把 GELU 換成 SwiGLU，結構略有不同，但「升維—非線性—降維」的精神不變。</p>
+      </div>
+
+      <h2 id="stack"><span class="sec">§ 4.4</span>堆疊 N 層，最後變成 logits</h2>
+      <p>完整的模型其實很單純：<strong>嵌入 → N 個相同結構的區塊 → 最後一次 LayerNorm → unembedding</strong>。最後一步把殘差流上的向量乘以一個 d × V 的矩陣（常和嵌入矩陣共用權重），為詞彙表中每個 token 打一個分數，這組分數就是 <span class="term" title="logits">logits</span>，第 05 章會把它變成機率並取樣。</p>
+      <p>參數幾乎都集中在區塊裡：每個區塊的注意力有 W<sub>Q</sub>、W<sub>K</sub>、W<sub>V</sub>、W<sub>O</sub> 四個 d×d 矩陣（4d²），FFN 有兩個 d×4d 矩陣（8d²），合計約 <strong>12d²</strong>。</p>
+
+      <figure class="plate" id="fig-4-3" tabindex="-1">
+        <div class="plate-head">
+          <span class="plate-fig">FIG 4.3</span>
+          <h3 class="plate-title">參數量估算器：12·N·d² + V·d</h3>
+          <span class="plate-hint">拖曳滑桿 / 套用預設</span>
+        </div>
+        <div class="plate-stage">
+          <div class="calc">
+            <div class="calc-fields">
+              <div class="field">
+                <label for="p-d">d_model</label>
+                <input type="range" id="p-d" min="0" max="13" step="1" value="4">
+                <output for="p-d" id="p-d-out">768</output>
+              </div>
+              <div class="field">
+                <label for="p-n">層數 N</label>
+                <input type="range" id="p-n" min="1" max="96" step="1" value="12">
+                <output for="p-n" id="p-n-out">12</output>
+              </div>
+              <div class="field">
+                <label for="p-v">詞彙量 V</label>
+                <input type="range" id="p-v" min="0" max="5" step="1" value="2">
+                <output for="p-v" id="p-v-out">50,257</output>
+              </div>
+              <div>
+                <p class="meta-label" style="margin:0 0 var(--s-2)">套用已知模型</p>
+                <div class="seg" role="group" aria-label="預設模型">
+                  <button type="button" aria-pressed="true" data-preset="0">GPT-2 S</button>
+                  <button type="button" aria-pressed="false" data-preset="1">GPT-2 XL</button>
+                  <button type="button" aria-pressed="false" data-preset="2">GPT-3</button>
+                </div>
+              </div>
+            </div>
+            <div>
+              <p class="meta-label" style="margin:0 0 var(--s-2)">估計參數量</p>
+              <p class="big-num"><span id="p-total">0</span><small id="p-unit">M</small></p>
+              <div class="stack-bar" aria-hidden="true">
+                <span id="bar-attn" style="background:var(--data-q)"></span>
+                <span id="bar-ffn" style="background:var(--data-k)"></span>
+                <span id="bar-emb" style="background:var(--data-hi)"></span>
+              </div>
+              <dl class="calc-break">
+                <dt style="--c:var(--data-q)"><i></i>注意力</dt><dd class="fx">4·N·d²</dd><dd id="p-attn">—</dd>
+                <dt style="--c:var(--data-k)"><i></i>前饋網路</dt><dd class="fx">8·N·d²</dd><dd id="p-ffn">—</dd>
+                <dt style="--c:var(--data-hi)"><i></i>嵌入表</dt><dd class="fx">V·d</dd><dd id="p-emb">—</dd>
+              </dl>
+              <p class="calc-cmp" id="p-cmp" aria-live="polite"></p>
+            </div>
+          </div>
+        </div>
+        <p class="plate-cap">忽略偏差項、LayerNorm 與位置嵌入等小項，並假設輸入嵌入與 unembedding 共用權重。用這條式子算 GPT-2 small 得約 1.24 億、GPT-3 約 1,750 億，和公開數字非常接近。</p>
+      </figure>
+
+      <h2 id="recap"><span class="sec">§ 4.5</span>本章重點</h2>
+      <ol class="takeaways">
+        <li>一個區塊 = 注意力（token 間交流）+ 前饋網路（各自加工），兩者前面各有一個 LayerNorm。</li>
+        <li>子層的輸出是「加」回殘差流，而不是取代它；這讓資訊與梯度都能暢通地穿越數十層。</li>
+        <li><span>殘差流像共用記事本：每一層讀取、再寫入一點新資訊，寬度始終是 d<sub>model</sub>。</span></li>
+        <li>FFN 先升維 4 倍再降維，可視為鍵值記憶，承載大量事實性知識，也占約三分之二的區塊參數。</li>
+        <li>模型 = 嵌入 → N 個區塊 → LayerNorm → unembedding；參數量約為 12·N·d² + V·d。</li>
+      </ol>
+
+      <nav class="pager" data-auto aria-label="章節翻頁"></nav>
+    </article>
+  </div>
+</main>
+
+<footer class="site-foot"><div class="site-foot-inner">
+  <p>圖解手記 · Visual Field Notes</p>
+  <p>圖版數值為教學示意</p>
+</div></footer>
+
+<script src="../assets/js/catalog.js"></script>
+<script src="../assets/js/site.js"></script>
+<script>
+(function () {
+  "use strict";
+  var S = FL.svg;
+
+  /* 小型向量格子（用於 inset） */
+  function vec(parent, x, y, vals, color, cw) {
+    cw = cw || 26;
+    vals.forEach(function (v, i) {
+      S("rect", { x: x + i * cw, y: y, width: cw - 2, height: 20, fill: color, "fill-opacity": Math.min(0.85, Math.abs(v) * 0.6 + 0.08), stroke: "var(--rule)" }, parent);
+    });
+  }
+  function bars(parent, x, base, vals, color, w) {
+    vals.forEach(function (v, i) {
+      var h = Math.abs(v) * 26;
+      S("rect", { x: x + i * (w + 4), y: v >= 0 ? base - h : base, width: w, height: Math.max(1, h), fill: color }, parent);
+    });
+    S("line", { x1: x - 4, x2: x + vals.length * (w + 4), y1: base, y2: base, stroke: "var(--rule-strong)" }, parent);
+  }
+
+  /* =========================================================
+     FIG 4.1 — 區塊資料流
+     ========================================================= */
+  (function block() {
+    var svg = document.getElementById("blk-svg"), plate = document.getElementById("fig-4-1");
+    var TX = 110, BX = 300, BW = 170;
+
+    // 主幹
+    S("line", { class: "trunk-band", x1: TX, x2: TX, y1: 534, y2: 26 }, svg);
+    S("line", { class: "trunk-line", x1: TX, x2: TX, y1: 534, y2: 26 }, svg);
+    var lab = S("text", { class: "svg-m", x: 0, y: 0, transform: "translate(" + (TX - 26) + ",380) rotate(-90)", "text-anchor": "middle", text: "殘差流 RESIDUAL STREAM" }, svg);
+    lab.style.fill = "var(--data-q)";
+
+    // 分支線（靜態）
+    var W = {
+      1: "M110 480 L300 480 L300 450",
+      2: "M300 418 L300 384",
+      3: "M300 334 L300 304 L122 304",
+      4: "M110 292 L110 266 L300 266 L300 240",
+      5: "M300 208 L300 178",
+      6: "M300 128 L300 98 L122 98"
+    };
+    [1, 2, 3, 4, 5, 6].forEach(function (k) {
+      var d = k === 4 ? "M110 266 L300 266 L300 240" : W[k];
+      S("path", { class: "wire", d: d }, svg);
+    });
+    // 小箭頭
+    [[300, 452], [300, 386], [300, 242], [300, 180], [124, 304], [124, 98]].forEach(function (p, i) {
+      var horiz = i >= 4;
+      S("path", { d: horiz ? "M" + (p[0] + 6) + " " + (p[1] - 4) + " L" + p[0] + " " + p[1] + " L" + (p[0] + 6) + " " + (p[1] + 4) : "M" + (p[0] - 4) + " " + (p[1] + 6) + " L" + p[0] + " " + p[1] + " L" + (p[0] + 4) + " " + (p[1] + 6), fill: "none", stroke: "var(--text-muted)", "stroke-width": 1.2 }, svg);
+    });
+    var wireOn = S("path", { class: "wire-on", d: "" }, svg);
+
+    // 方塊
+    function box(y, h, title, sub) {
+      var g = S("g", { class: "blk" }, svg);
+      S("rect", { x: BX - BW / 2, y: y, width: BW, height: h, rx: 2 }, g);
+      S("text", { class: "svg-t", x: BX, y: y + h / 2 - (sub ? 7 : 0), text: title, style: "font-weight:700" }, g);
+      if (sub) S("text", { class: "sub", x: BX, y: y + h / 2 + 10, text: sub }, g);
+      return g;
+    }
+    var bLN1 = box(418, 32, "LayerNorm"), bMHA = box(334, 50, "多頭注意力", "MULTI-HEAD ATTENTION");
+    var bLN2 = box(208, 32, "LayerNorm"), bFFN = box(128, 50, "前饋網路", "FFN · d→4d→d");
+    function add(y) {
+      var g = S("g", { class: "add" }, svg);
+      S("circle", { cx: TX, cy: y, r: 12 }, g);
+      S("path", { d: "M" + (TX - 6) + " " + y + " h12 M" + TX + " " + (y - 6) + " v12" }, g);
+      var ring = S("circle", { class: "add-ring", cx: TX, cy: y, r: 12 }, svg);
+      return { g: g, ring: ring };
+    }
+    var a1 = add(304), a2 = add(98);
+
+    // 輸入／輸出
+    var gin = S("g", { class: "blk" }, svg);
+    S("rect", { x: TX - 62, y: 536, width: 124, height: 30, rx: 2 }, gin);
+    S("text", { class: "svg-t", x: TX, y: 551, text: "輸入 x" }, gin);
+    S("text", { class: "svg-m", x: TX, y: 12, "text-anchor": "middle", text: "↑ 下一個區塊" }, svg);
+    S("text", { class: "svg-m", x: BX, y: 500, "text-anchor": "middle", text: "複製一份 →" }, svg);
+    S("text", { class: "svg-m", x: BX + 4, y: 286, "text-anchor": "middle", text: "複製一份 →" }, svg);
+
+    // 動點
+    var dotT = S("circle", { class: "dot-t", r: 6, cx: TX, cy: 534 }, svg);
+    var dotB = S("circle", { class: "dot-b", r: 6, cx: TX, cy: 480, opacity: 0 }, svg);
+
+    // 路徑：每步 { t: 主幹點路徑, b: 分支點路徑 }
+    var P = [
+      { t: "M110 548 L110 480" },
+      { t: "M110 480 L110 318", b: "M110 480 L300 480 L300 434" },
+      { b: "M300 434 L300 359" },
+      { b: "M300 359 L300 304 L110 304", t: "M110 318 L110 304" },
+      { t: "M110 304 L110 112", b: "M110 304 L110 266 L300 266 L300 224" },
+      { b: "M300 224 L300 153" },
+      { b: "M300 153 L300 98 L110 98", t: "M110 112 L110 98" },
+      { t: "M110 98 L110 26" }
+    ];
+    var meas = S("g", { style: "visibility:hidden" }, svg);
+    P.forEach(function (p) {
+      if (p.t) p.tp = S("path", { d: p.t, fill: "none" }, meas);
+      if (p.b) p.bp = S("path", { d: p.b, fill: "none" }, meas);
+    });
+    function endOf(path) { var L = path.getTotalLength(); return path.getPointAtLength(L); }
+    function place(dot, pt) { dot.setAttribute("cx", pt.x); dot.setAttribute("cy", pt.y); }
+
+    // inset 圖
+    vec(document.getElementById("inset-x"), 20, 20, [0.9, -0.4, 1.3, 0.2, -1.1, 0.6, 0.3, -0.7], "var(--data-q)", 32);
+    (function () {
+      var g = document.getElementById("inset-ln");
+      var raw = [1.6, -0.3, 2.4, 0.4, -1.8, 1.1];
+      bars(g, 14, 58, raw.map(function (v) { return v * 0.75; }), "var(--text-muted)", 14);
+      var m = raw.reduce(function (a, b) { return a + b; }) / raw.length;
+      var sd = Math.sqrt(raw.reduce(function (a, b) { return a + (b - m) * (b - m); }, 0) / raw.length);
+      S("text", { class: "svg-m", x: 140, y: 58, "text-anchor": "middle", text: "→" }, g);
+      bars(g, 168, 58, raw.map(function (v) { return (v - m) / sd * 0.8; }), "var(--accent)", 14);
+    })();
+    (function () {
+      var g = document.getElementById("inset-ln2");
+      var raw = [0.4, 2.2, -1.4, 1.9, 0.1, -0.6];
+      bars(g, 14, 50, raw.map(function (v) { return v * 0.75; }), "var(--text-muted)", 14);
+      var m = raw.reduce(function (a, b) { return a + b; }) / raw.length;
+      var sd = Math.sqrt(raw.reduce(function (a, b) { return a + (b - m) * (b - m); }, 0) / raw.length);
+      S("text", { class: "svg-m", x: 140, y: 50, "text-anchor": "middle", text: "→" }, g);
+      bars(g, 168, 50, raw.map(function (v) { return (v - m) / sd * 0.8; }), "var(--accent)", 14);
+    })();
+    (function () {
+      var g = document.getElementById("inset-mha"), xs = [30, 90, 150, 210, 270];
+      var ws = [0.5, 0.15, 0.1, 0.05, 0.2];
+      xs.forEach(function (x, i) {
+        if (i === 4) return;
+        var h = 14 + (270 - x) * 0.22;
+        S("path", { d: "M270 62 Q " + (x + 270) / 2 + " " + (62 - h * 2) + " " + x + " 62", fill: "none", stroke: "var(--data-k)", "stroke-width": (1 + ws[i] * 10).toFixed(1), opacity: (0.3 + ws[i]).toFixed(2) }, g);
+      });
+      xs.forEach(function (x, i) {
+        S("rect", { x: x - 12, y: 62, width: 24, height: 18, fill: i === 4 ? "var(--data-q)" : "var(--surface-page)", stroke: "var(--rule-strong)" }, g);
+      });
+    })();
+    function addInset(g, a, b) {
+      var c = a.map(function (v, i) { return v + b[i]; });
+      vec(g, 0, 24, a, "var(--data-q)", 15);
+      S("text", { class: "svg-m", x: 98, y: 34, "text-anchor": "middle", text: "+" }, g);
+      vec(g, 106, 24, b, "var(--accent)", 15);
+      S("text", { class: "svg-m", x: 202, y: 34, "text-anchor": "middle", text: "=" }, g);
+      vec(g, 210, 24, c, "var(--data-q)", 15);
+      S("text", { class: "svg-m", x: 0, y: 10, text: "x" }, g);
+      S("text", { class: "svg-m", x: 106, y: 10, text: "子層輸出" }, g);
+      S("text", { class: "svg-m", x: 210, y: 10, text: "新的 x" }, g);
+    }
+    addInset(document.getElementById("inset-add"), [0.9, -0.4, 1.3, 0.2, -1.1, 0.6], [0.2, 0.6, -0.3, 0.5, 0.1, -0.2]);
+    addInset(document.getElementById("inset-add2"), [1.1, 0.2, 1.0, 0.7, -1.0, 0.4], [-0.3, 0.4, 0.2, -0.6, 0.5, 0.3]);
+    (function () {
+      var g = document.getElementById("inset-ffn");
+      function col(x, n, color, label) {
+        var top = 55 - n * 5;
+        for (var i = 0; i < n; i++) S("circle", { cx: x, cy: top + i * 10 + 5, r: 3.6, fill: color }, g);
+        S("text", { class: "svg-m", x: x, y: 104, "text-anchor": "middle", text: label }, g);
+        return { x: x, top: top, n: n };
+      }
+      var c1 = col(40, 4, "var(--data-q)", "d"), c2 = col(150, 10, "var(--accent)", "4d · GELU"), c3 = col(260, 4, "var(--data-q)", "d");
+      [[c1, c2], [c2, c3]].forEach(function (pr) {
+        var a = pr[0], b = pr[1];
+        S("path", { d: "M" + (a.x + 6) + " " + a.top + " L" + (b.x - 6) + " " + b.top + " M" + (a.x + 6) + " " + (a.top + a.n * 10) + " L" + (b.x - 6) + " " + (b.top + b.n * 10), stroke: "var(--rule-strong)", fill: "none", "stroke-width": 1 }, g);
+      });
+    })();
+
+    var panes = plate.querySelectorAll("[data-pane]");
+    var stepLabel = document.getElementById("blk-step-label");
+    var cancel = [];
+    var steps = [
+      { narr: "token 向量從底部進入<b>殘差流</b>。接下來的每個子層都會「複製一份」出去計算，再把結果加回來。" },
+      { narr: "第一個分支：複製一份向量送進 <b>LayerNorm</b>，把數值尺度拉到穩定範圍。主幹上的原始向量則原封不動地等在 ⊕ 前。" },
+      { narr: "<b>多頭注意力</b>讓這個 token 去看句子裡的其他 token，蒐集需要的資訊。這是唯一跨位置交流的步驟。" },
+      { narr: "注意力的結果<b>加回</b>主幹（⊕）。原資訊沒有被覆蓋，只是多了一層「上下文」。" },
+      { narr: "第二個分支：再複製一份，先經過另一個 <b>LayerNorm</b>。" },
+      { narr: "<b>前饋網路</b>對每個 token 各自運算：升維到 4 倍、套上 GELU、再降回原維度——像在查一本內建的知識手冊。" },
+      { narr: "FFN 的結果再次<b>加回</b>主幹。至此一個區塊完成：形狀不變，內容更豐富。" },
+      { narr: "輸出直接成為<b>下一個區塊</b>的輸入。同樣的結構重複 N 次，就是整個 Transformer。" }
+    ];
+
+    FL.stepper(plate, {
+      steps: steps,
+      autoplay: 2400,
+      render: function (i, info) {
+        cancel.forEach(function (c) { c(); }); cancel = [];
+        [bLN1, bMHA, bLN2, bFFN].forEach(function (b) { b.classList.remove("is-on"); });
+        a1.g.classList.remove("is-on"); a2.g.classList.remove("is-on");
+        ({ 1: bLN1, 2: bMHA, 4: bLN2, 5: bFFN })[i] && ({ 1: bLN1, 2: bMHA, 4: bLN2, 5: bFFN })[i].classList.add("is-on");
+        if (i === 3) a1.g.classList.add("is-on");
+        if (i === 6) a2.g.classList.add("is-on");
+        gin.classList.toggle("is-on", i === 0);
+
+        panes.forEach(function (p) { p.hidden = +p.dataset.pane !== i; });
+        stepLabel.textContent = "步驟 " + String(i + 1).padStart(2, "0") + " / 08";
+
+        // 亮起的分支線
+        var wd = ({ 1: W[1], 2: W[2], 3: W[3], 4: "M110 266 L300 266 L300 240", 5: W[5], 6: W[6] })[i];
+        wireOn.setAttribute("d", wd || "");
+        FL.drawReset(wireOn);
+        if (wd && info.dir > 0) FL.drawIn(wireOn, 0);
+
+        // 計算各點起訖位置
+        var tEnd = { x: 110, y: 548 }, bEnd = null;
+        for (var k = 0; k <= i; k++) {
+          if (P[k].tp) tEnd = endOf(P[k].tp);
+          if (P[k].bp) bEnd = endOf(P[k].bp);
+        }
+        var showB = i >= 1 && i <= 6;
+        dotB.setAttribute("opacity", showB ? 1 : 0);
+
+        if (info.dir > 0 && i > 0) {
+          var p = P[i];
+          function run(dot, path) {
+            var L = path.getTotalLength();
+            cancel.push(FL.tween(900, function (e) { place(dot, path.getPointAtLength(L * e)); }));
+          }
+          if (p.tp) run(dotT, p.tp); else place(dotT, tEnd);
+          if (p.bp) run(dotB, p.bp); else if (bEnd) place(dotB, bEnd);
+          if (i === 3 || i === 6) {
+            var ring = i === 3 ? a1.ring : a2.ring;
+            setTimeout(function () { ring.classList.remove("go"); ring.getBoundingClientRect(); if (!FL.reducedMotion()) ring.classList.add("go"); }, 820);
+          }
+        } else {
+          place(dotT, tEnd);
+          if (bEnd) place(dotB, bEnd);
+        }
+      }
+    });
+  })();
+
+  /* =========================================================
+     FIG 4.2 — 殘差流河道
+     ========================================================= */
+  (function river() {
+    var svg = document.getElementById("river-svg"), plate = document.getElementById("fig-4-2");
+    var slider = document.getElementById("river-n"), out = document.getElementById("river-n-out");
+    var list = document.getElementById("river-list"), title = document.getElementById("river-title"), narr = document.getElementById("river-narr");
+    var playBtn = document.getElementById("river-play");
+    var X0 = 40, X1 = 720, RY = 120, RH = 130;
+
+    var FEATS = [
+      { c: "var(--text-faint)", name: "token 本身：「它」", short: "嵌入", w: 1.0, layer: "嵌入層" },
+      { c: "var(--data-q)", name: "詞性：代名詞、位置在「因為」之後", short: "詞性", w: 0.55 },
+      { c: "var(--data-v)", name: "句法：它是後半句子句的主詞", short: "句法", w: 0.55 },
+      { c: "var(--data-hi)", name: "指代：「它」= 前面的「貓」", short: "指代", w: 0.7 },
+      { c: "var(--data-k)", name: "語意：一隻會疲倦、有生命的動物", short: "語意", w: 0.65 },
+      { c: "var(--c-f5)", name: "語氣：在解釋原因（因為…）", short: "語氣", w: 0.5 },
+      { c: "var(--c-f6)", name: "預測：下一個字很可能是「太」「很」", short: "預測", w: 0.75 }
+    ];
+    var N = 6, sel = N, playTimer = null;
+
+    var gRiver = S("g", { class: "river-g" }, svg);
+    var gLayers = S("g", {}, svg);
+    var gLabels = S("g", {}, svg);
+    S("text", { class: "svg-m", x: X0, y: RY + RH + 26, text: "嵌入 →" }, gLabels);
+    S("text", { class: "svg-m", x: X1 + 74, y: RY + RH / 2 - 10, "text-anchor": "end", text: "→ LN" }, gLabels);
+    S("text", { class: "svg-m", x: X1 + 74, y: RY + RH / 2 + 8, "text-anchor": "end", text: "→ logits" }, gLabels);
+    S("text", { class: "svg-m", x: X0, y: RY - 12, text: "寬度 d_model（固定）" }, gLabels);
+
+    FEATS.forEach(function (f, k) {
+      var li = FL.el("li", { style: "--c:" + f.c }, list);
+      FL.el("i", {}, li);
+      FL.el("b", { text: k === 0 ? "EMB" : "L" + k }, li);
+      FL.el("span", { text: f.name }, li);
+      f.li = li;
+    });
+
+    function segX(s) { return X0 + s * (X1 - X0) / (N + 1); }
+    function draw() {
+      gRiver.innerHTML = ""; gLayers.innerHTML = "";
+      for (var s = 0; s <= N; s++) {
+        var x = segX(s), w = segX(s + 1) - x;
+        var tot = 0, k;
+        for (k = 0; k <= s; k++) tot += FEATS[k].w;
+        var y = RY;
+        for (k = 0; k <= s; k++) {
+          var h = FEATS[k].w / tot * RH;
+          var r = S("rect", { class: "band", x: x.toFixed(1), y: y.toFixed(1), width: (w + 0.5).toFixed(1), height: h.toFixed(1), fill: FEATS[k].c, "fill-opacity": k === 0 ? 0.45 : 0.85 }, gRiver);
+          if (sel > 0 && k !== sel && s >= sel) r.classList.add("is-faded");
+          if (sel > 0 && k === sel) r.setAttribute("stroke", "var(--rule-strong)");
+          y += h;
+        }
+      }
+      S("rect", { x: X0, y: RY, width: X1 - X0, height: RH, fill: "none", stroke: "var(--rule-strong)" }, gRiver);
+
+      for (var L = 1; L <= N; L++) (function (L) {
+        var x = segX(L);
+        var g = S("g", { class: "lyr" + (L === sel ? " is-sel" : ""), tabindex: "0", role: "button", "aria-label": "第 " + L + " 層群：" + FEATS[L].name, "aria-pressed": L === sel ? "true" : "false" }, gLayers);
+        S("line", { class: "rw-read", x1: x - 8, x2: x - 8, y1: RY, y2: 62 }, g);
+        S("line", { class: "rw-write", x1: x + 8, x2: x + 8, y1: 62, y2: RY, stroke: FEATS[L].c }, g);
+        S("path", { d: "M" + (x + 4) + " " + (RY - 8) + " L" + (x + 8) + " " + RY + " L" + (x + 12) + " " + (RY - 8), fill: "none", stroke: FEATS[L].c, "stroke-width": 2 }, g);
+        S("rect", { x: x - 26, y: 30, width: 52, height: 32, rx: 2 }, g);
+        S("text", { x: x, y: 46, text: "L" + L }, g);
+        S("line", { x1: x, x2: x, y1: RY, y2: RY + RH, stroke: "var(--rule-strong)", "stroke-dasharray": "2 3", opacity: 0.6 }, g);
+        function pick() { stopPlay(); sel = L; draw(); }
+        g.addEventListener("click", pick);
+        g.addEventListener("keydown", function (e) { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); pick(); } });
+      })(L);
+      S("text", { class: "svg-m", x: segX(0) + 8, y: 46, text: "讀 ┆ 寫" }, gLayers);
+
+      FEATS.forEach(function (f, k) {
+        f.li.classList.toggle("is-sel", k === sel);
+        f.li.classList.toggle("is-off", k > N);
+      });
+      title.textContent = sel > 0 ? "第 " + sel + " 層群寫入了什麼" : "目前殘差流的內容";
+      narr.innerHTML = sel > 0
+        ? "L" + sel + " 從河裡<b>讀取</b>目前的內容（虛線），然後<b>寫入</b>「" + FEATS[sel].short + "」這層資訊（色帶）：" + FEATS[sel].name + "。之前寫入的資訊全部保留，只是比例被稀釋。"
+        : "嵌入後的河道只有 token 本身的資訊。";
+      if (N < 6) narr.innerHTML += " 只有 " + N + " 個層群時，到最後仍缺少「" + FEATS.slice(N + 1).map(function (f) { return f.short; }).join("、") + "」——層數越少，模型能累積的理解越淺。";
+    }
+
+    function reveal() {
+      if (FL.reducedMotion()) return;
+      gRiver.style.transition = "none";
+      gRiver.style.clipPath = "inset(0 100% 0 0)";
+      gRiver.getBoundingClientRect();
+      gRiver.style.transition = "";
+      gRiver.style.clipPath = "inset(0 0 0 0)";
+    }
+    function stopPlay() { clearInterval(playTimer); playTimer = null; playBtn.textContent = "逐層寫入"; }
+
+    slider.addEventListener("input", function () {
+      stopPlay();
+      N = +slider.value; out.textContent = N;
+      if (sel > N) sel = N;
+      draw();
+    });
+    playBtn.addEventListener("click", function () {
+      if (playTimer) { stopPlay(); return; }
+      sel = 1; draw(); reveal();
+      playBtn.textContent = "停止";
+      playTimer = setInterval(function () {
+        if (sel >= N) { stopPlay(); return; }
+        sel++; draw();
+      }, FL.reducedMotion() ? 1600 : 1300);
+    });
+    draw();
+    FL.inView(svg, reveal);
+  })();
+
+  /* =========================================================
+     FIG 4.3 — 參數量估算器
+     ========================================================= */
+  (function calc() {
+    var plate = document.getElementById("fig-4-3");
+    var DS = [128, 256, 384, 512, 768, 1024, 1280, 1600, 2048, 2560, 4096, 5120, 8192, 12288];
+    var VS = [8000, 32000, 50257, 100000, 128000, 256000];
+    var PRESETS = [
+      { d: 4, n: 12, v: 2, name: "GPT-2 small", real: "1.24 億" },
+      { d: 7, n: 48, v: 2, name: "GPT-2 XL", real: "15 億" },
+      { d: 13, n: 96, v: 2, name: "GPT-3", real: "1,750 億" }
+    ];
+    var known = [
+      { p: 124e6, name: "GPT-2 small（1.24 億）" },
+      { p: 355e6, name: "GPT-2 medium（3.55 億）" },
+      { p: 1.5e9, name: "GPT-2 XL（15 億）" },
+      { p: 6.7e9, name: "GPT-3 6.7B" },
+      { p: 175e9, name: "GPT-3（1,750 億）" }
+    ];
+    var fd = document.getElementById("p-d"), fn = document.getElementById("p-n"), fv = document.getElementById("p-v");
+    var od = document.getElementById("p-d-out"), on = document.getElementById("p-n-out"), ov = document.getElementById("p-v-out");
+    var total = document.getElementById("p-total"), unit = document.getElementById("p-unit");
+    var lastUnit = "M";
+
+    function human(x) {
+      if (x >= 1e9) return (x / 1e9).toFixed(2) + " B";
+      return (x / 1e6).toFixed(1) + " M";
+    }
+    function update() {
+      var d = DS[+fd.value], n = +fn.value, v = VS[+fv.value];
+      od.textContent = d.toLocaleString(); on.textContent = n; ov.textContent = v.toLocaleString();
+      var attn = 4 * n * d * d, ffn = 8 * n * d * d, emb = v * d, sum = attn + ffn + emb;
+      var u = sum >= 1e9 ? "B" : "M", val = sum / (u === "B" ? 1e9 : 1e6);
+      FL.ticker(total, val, { digits: u === "B" ? 2 : 1, instant: u !== lastUnit });
+      lastUnit = u;
+      unit.textContent = u === "B" ? "B（十億）" : "M（百萬）";
+      document.getElementById("bar-attn").style.width = (attn / sum * 100) + "%";
+      document.getElementById("bar-ffn").style.width = (ffn / sum * 100) + "%";
+      document.getElementById("bar-emb").style.width = (emb / sum * 100) + "%";
+      document.getElementById("p-attn").textContent = human(attn);
+      document.getElementById("p-ffn").textContent = human(ffn);
+      document.getElementById("p-emb").textContent = human(emb);
+      var near = known.reduce(function (a, b) { return Math.abs(Math.log(b.p / sum)) < Math.abs(Math.log(a.p / sum)) ? b : a; });
+      var ratio = sum / near.p;
+      document.getElementById("p-cmp").innerHTML = ratio > 0.9 && ratio < 1.1
+        ? "與 <b>" + near.name + "</b> 幾乎相同。"
+        : "約為 <b>" + near.name + "</b> 的 " + (ratio >= 1 ? ratio.toFixed(1) + " 倍" : (ratio * 100).toFixed(0) + "%") + "。" +
+          (emb / sum > 0.3 ? " 模型很小時，嵌入表會占掉相當比例。" : "");
+      plate.querySelectorAll("[data-preset]").forEach(function (b) {
+        var p = PRESETS[+b.dataset.preset];
+        b.setAttribute("aria-pressed", p.d === +fd.value && p.n === n && p.v === +fv.value ? "true" : "false");
+      });
+    }
+    [fd, fn, fv].forEach(function (f) { f.addEventListener("input", update); });
+    plate.querySelectorAll("[data-preset]").forEach(function (b) {
+      b.addEventListener("click", function () {
+        var p = PRESETS[+b.dataset.preset];
+        fd.value = p.d; fn.value = p.n; fv.value = p.v; update();
+      });
+    });
+    update();
+  })();
+})();
+</script>
+</body>
+</html>

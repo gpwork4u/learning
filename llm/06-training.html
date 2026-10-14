@@ -1,0 +1,662 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>訓練與對齊 · LLM 理論 · 圖解手記</title>
+<meta name="description" content="用可操作的圖版理解 LLM 的訓練：交叉熵損失、梯度下降與學習率、預訓練 → 指令微調 → 偏好對齊。">
+<script>try{var t=localStorage.getItem("fl-theme");if(t)document.documentElement.setAttribute("data-theme",t)}catch(e){}</script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,300..700;1,9..144,400&family=JetBrains+Mono:wght@400;500;600&family=Noto+Sans+TC:wght@400;500;700&family=Noto+Serif+TC:wght@700&display=swap">
+<link rel="stylesheet" href="../assets/css/site.css">
+<style>
+  /* ---- 本章圖版樣式 ---- */
+  .ax-line { stroke: var(--rule-strong); stroke-width: 1; }
+  .ax-grid { stroke: var(--rule); stroke-width: 1; stroke-dasharray: 2 4; }
+  .ax-t { font: 500 11px var(--f-mono); fill: var(--text-muted); }
+  .ax-title { font: 600 11px var(--f-mono); fill: var(--text-muted); letter-spacing: .06em; }
+
+  /* FIG 6.1 交叉熵 */
+  .ce-curve { fill: none; stroke: var(--accent); stroke-width: 2.4; stroke-linecap: round; }
+  .ce-guide { stroke: var(--text-muted); stroke-width: 1; stroke-dasharray: 3 3; }
+  .ce-dot { fill: var(--surface-raised); stroke: var(--accent); stroke-width: 3; }
+  .ce-dot-lbl { font: 600 12px var(--f-mono); fill: var(--text); }
+  .cand { margin: 0; padding: 0; list-style: none; display: grid; gap: 6px; }
+  .cand li { display: grid; grid-template-columns: 3em 1fr 3.2em; gap: var(--s-2); align-items: center; font-size: .86rem; }
+  .cand .b { height: 10px; background: var(--surface-sunken); position: relative; }
+  .cand .b i { position: absolute; inset: 0 auto 0 0; background: var(--text-muted); transition: width var(--dur-2) var(--ease-out); }
+  .cand li.ok .b i { background: var(--accent); }
+  .cand li.ok span:first-child { font-weight: 700; color: var(--accent); }
+  .cand .p { font: 500 .76rem var(--f-mono); text-align: right; font-variant-numeric: tabular-nums; }
+  .ce-prompt { margin: 0 0 var(--s-2); font-size: .92rem; }
+  .ce-prompt u { text-decoration: none; border-bottom: 2px solid var(--accent); padding: 0 .4em; }
+  .big-num { font: 600 2rem/1 var(--f-mono); font-variant-numeric: tabular-nums; color: var(--accent); }
+
+  /* FIG 6.2 梯度下降 */
+  .gd-contour { fill: none; stroke: var(--text-muted); stroke-width: 1; }
+  .gd-contour.lv0 { stroke: var(--accent); stroke-opacity: .55; }
+  .gd-fill { fill: var(--accent-soft); }
+  .gd-path { fill: none; stroke: var(--data-q); stroke-width: 2; stroke-linejoin: round; stroke-linecap: round; }
+  .gd-pts circle { fill: var(--data-q); }
+  .gd-ball { fill: var(--surface-raised); stroke: var(--data-q); stroke-width: 3; }
+  .gd-start { fill: none; stroke: var(--text); stroke-width: 1.4; }
+  .gd-min { stroke: var(--accent); stroke-width: 1.6; }
+  .gd-lbl { font: 500 11px var(--f-mono); fill: var(--text-muted); }
+  .lc-line { fill: none; stroke: var(--data-q); stroke-width: 1.8; stroke-linejoin: round; }
+  .lc-box { fill: var(--surface-page); stroke: var(--rule); }
+  .gd-status { font: 600 .82rem/1.3 var(--f-mono); }
+  .gd-status[data-s="ok"] { color: var(--data-v); }
+  .gd-status[data-s="slow"] { color: var(--data-hi); }
+  .gd-status[data-s="osc"] { color: var(--data-hi); }
+  .gd-status[data-s="div"] { color: var(--data-k); }
+  .lr-scale { display: flex; justify-content: space-between; font: 500 .66rem var(--f-mono); color: var(--text-faint); margin-top: 2px; }
+  #gd-svg { width: 100%; height: auto; }
+  #lc-svg { width: 100%; height: auto; }
+
+  /* FIG 6.3 三階段管線 */
+  .pipe { list-style: none; margin: 0 0 var(--s-5); padding: 0; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 0 var(--s-3); }
+  .pipe li { position: relative; padding: var(--s-3) 0 0; display: grid; gap: 2px; color: var(--text-faint); transition: color var(--dur-2) linear; }
+  .pipe li::before { content: ""; position: absolute; left: 0; right: 0; top: 0; height: 1px; background: var(--rule); }
+  .pipe li::after { content: ""; position: absolute; left: 0; right: 0; top: -1px; height: 3px; background: var(--text-muted); transform: scaleX(0); transform-origin: left; transition: transform var(--dur-3) var(--ease-out), background var(--dur-2) linear; }
+  .pipe li.done, .pipe li.now { color: var(--text); }
+  .pipe li.done::after { transform: scaleX(1); }
+  .pipe li.now::after { transform: scaleX(1); background: var(--accent); }
+  .pipe-n { font: 500 .72rem/1.4 var(--f-mono); letter-spacing: .06em; }
+  .pipe li.now .pipe-n { color: var(--accent); }
+  .pipe b { font: 700 1rem/1.35 var(--f-body); }
+  .pipe small { font: italic 400 .84rem/1.3 var(--f-display); color: var(--text-muted); }
+  @media (max-width: 640px) { .pipe { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--s-4) var(--s-3); } }
+
+  .pipe-panels { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: var(--s-5); }
+  @media (max-width: 760px) { .pipe-panels { grid-template-columns: 1fr; } }
+  .pp { border-top: 1px solid var(--rule-strong); padding-top: var(--s-3); min-width: 0; }
+  .pp > .meta-label { margin: 0 0 var(--s-3); }
+  .pp-meta { display: grid; grid-template-columns: auto 1fr; gap: 4px var(--s-3); margin: var(--s-3) 0 0; font-size: .84rem; }
+  .pp-meta dt { font: 500 .72rem/1.7 var(--f-mono); color: var(--text-muted); letter-spacing: .04em; }
+  .pp-meta dd { margin: 0; }
+  .pp-doc { margin: 0; padding: var(--s-3); background: var(--surface-page); border: 1px solid var(--rule); font: 400 .92rem/1.7 var(--f-body); color: var(--text-muted); }
+  .pp-next { color: var(--surface-page); background: var(--accent); padding: 0 .3em; }
+  .pp-pair { display: grid; gap: var(--s-2); }
+  .pp-pair p { margin: 0; padding: var(--s-2) var(--s-3); background: var(--surface-page); border: 1px solid var(--rule); font-size: .9rem; }
+  .pp-pair .meta-label { display: block; margin-bottom: 2px; }
+  .pp-pair .chosen { border-color: var(--data-v); border-left-width: 3px; }
+  .pp-pair .chosen .meta-label { color: var(--data-v); }
+  .pp-pair .rejected { opacity: .72; }
+  .pp-prompt { margin: 0 0 var(--s-2); font-size: .9rem; color: var(--text-muted); }
+  .pp-out { margin: 0; padding: var(--s-3); border-left: 2px solid var(--data-q); background: var(--data-q-soft); font-size: .98rem; line-height: 1.7; min-height: 3.6em; }
+  .pp-out.garbled { font-family: var(--f-mono); letter-spacing: .06em; }
+  .pp-note { margin: var(--s-2) 0 0; font-size: .84rem; color: var(--text-muted); }
+  .pp-empty { margin: 0; padding: var(--s-3); border: 1px dashed var(--rule); color: var(--text-muted); font-size: .9rem; }
+  .pp-body { min-height: 9em; }
+
+  /* §6.4 scaling 小圖 */
+  .sc-line { fill: none; stroke: var(--accent); stroke-width: 2; }
+  .sc-pt { fill: var(--surface-raised); stroke: var(--accent); stroke-width: 2; }
+</style>
+</head>
+<body data-track="llm" data-chapter="06">
+<a class="skip-link" href="#main">跳到主要內容</a>
+<header class="masthead"><div class="masthead-inner">
+  <a class="brand" href="../index.html">
+    <svg class="brand-mark" viewBox="0 0 26 26" aria-hidden="true"><rect class="bm-frame" x="1" y="1" width="24" height="24"/><path class="bm-line" d="M1 19 L9 12 L15 16 L25 6"/><circle class="bm-dot" cx="15" cy="16" r="2.6"/></svg>
+    <span class="brand-name">圖解手記<small>Visual Field Notes</small></span>
+  </a>
+  <nav class="site-nav" aria-label="主要">
+    <a href="../index.html#categories" class="nav-optional">分類</a>
+    <a href="index.html" class="is-current">LLM 理論</a>
+    <a href="../preview.html" class="nav-optional">元件</a>
+  </nav>
+  <button class="theme-toggle" type="button" aria-label="切換主題"><svg viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="6"/><path d="M8 2a6 6 0 0 0 0 12z" fill="currentColor"/></svg></button>
+</div></header>
+
+<main id="main" class="page">
+  <ol class="crumbs">
+    <li><a href="../index.html">圖解手記</a></li>
+    <li><a href="index.html">01 LLM 理論</a></li>
+    <li aria-current="page">第 06 章</li>
+  </ol>
+
+  <header class="chapter-head">
+    <p class="chapter-num" aria-hidden="true">0<span class="num-accent">6</span></p>
+    <div>
+      <p class="meta-label">LLM 理論 · 第 06 章</p>
+      <h1 class="chapter-title">訓練與對齊<span class="en">Training &amp; Alignment</span></h1>
+      <p class="chapter-deck">前面五章拆解了模型「怎麼算」，這一章回答「參數從哪裡來」。從一個最單純的目標——猜對下一個 token——出發，看梯度下降如何一步步調整數十億個參數，以及模型如何從「會續寫」變成「會回答」。</p>
+      <ul class="chapter-meta">
+        <li>閱讀 <b>14 分鐘</b></li>
+        <li>互動圖版 <b>3</b></li>
+        <li>先備 <b>第 05 章 生成與取樣</b></li>
+      </ul>
+    </div>
+  </header>
+
+  <div class="chapter-body">
+    <aside class="rail" aria-label="本章導覽">
+      <div class="rail-inner">
+        <div>
+          <p class="meta-label">本章目錄</p>
+          <ol class="toc"></ol>
+        </div>
+        <div class="rail-figs-wrap">
+          <p class="meta-label">圖版</p>
+          <ul class="rail-figs"></ul>
+        </div>
+      </div>
+    </aside>
+
+    <article class="prose">
+      <h2 id="objective"><span class="sec">§ 6.1</span>學習目標：猜對下一個字</h2>
+      <p class="lede">大型語言模型的訓練目標出奇地單純：給它一段文字的前半，要它預測下一個 token，然後看它猜得有多準。</p>
+      <p>第 05 章說過，模型每一步都會輸出一個機率分布。訓練時我們手上有正確答案，所以只要看<strong>正確答案拿到的機率 p</strong>：p 越高越好。把它轉成「越小越好」的數字，就是<span class="term" title="Cross-Entropy Loss">交叉熵損失</span>：</p>
+      <div class="formula" role="math" aria-label="Loss equals negative log of p correct">
+        Loss = −log <var>p</var>(正確的 token)<br>
+        <span class="cmt">// p = 1 → 損失 0；p 趨近 0 → 損失趨近無限大</span>
+      </div>
+
+      <figure class="plate" id="fig-6-1" tabindex="-1">
+        <div class="plate-head">
+          <span class="plate-fig">FIG 6.1</span>
+          <h3 class="plate-title">拖動滑桿，看正確答案的機率如何決定損失</h3>
+          <span class="plate-hint">拖動滑桿</span>
+        </div>
+        <div class="plate-stage">
+          <div class="stage-split">
+            <svg id="ce-svg" class="stage-svg" viewBox="0 0 600 310" role="img" aria-label="負對數損失曲線"></svg>
+            <div class="readout">
+              <p class="ce-prompt">「貓咪趴在<u>　？　</u>上睡覺」</p>
+              <ul class="cand" id="ce-cand"></ul>
+              <dl style="margin-top:var(--s-4)">
+                <dt>p(墊子)</dt><dd id="ce-p">0.25</dd>
+                <dt>損失 −log p</dt><dd><span class="big-num" id="ce-loss">1.39</span></dd>
+              </dl>
+            </div>
+          </div>
+        </div>
+        <div class="plate-controls">
+          <div class="field">
+            <label for="ce-range">p(正確)</label>
+            <input type="range" id="ce-range" min="0.01" max="0.99" step="0.01" value="0.25">
+            <output for="ce-range" id="ce-out">0.25</output>
+          </div>
+          <span class="spacer"></span>
+          <ul class="legend"><li style="--c:var(--accent)"><i></i>正確答案</li><li style="--c:var(--text-muted)"><i></i>其他候選</li></ul>
+        </div>
+        <p class="plate-narr" id="ce-narr"></p>
+        <p class="plate-cap">對數底數用自然對數 e。若模型完全亂猜（詞彙表 5 萬個 token 平均分配），起始損失約為 ln 50000 ≈ 10.8；訓練良好的大型模型在一般文本上可以降到 2 以下。</p>
+      </figure>
+
+      <p>整份訓練資料的損失，就是每一個位置的 −log p 取平均。注意曲線左側非常陡：模型對正確答案「完全沒想到」時，會受到最重的懲罰，也帶來最強的學習訊號。</p>
+
+      <h2 id="descent"><span class="sec">§ 6.2</span>梯度下降與學習率</h2>
+      <p>損失是所有參數的函數。想像一片地形：位置是參數的值，高度是損失。訓練就是蒙著眼睛下山——每一步摸摸腳下的坡度（<strong>梯度</strong>），往下坡方向走一小步：</p>
+      <div class="formula" role="math" aria-label="theta new equals theta minus learning rate times gradient">
+        <var>θ</var> ← <var>θ</var> − <var>η</var> · ∇Loss(<var>θ</var>)<br>
+        <span class="cmt">// η（eta）就是學習率：每一步要跨多大</span>
+      </div>
+      <p>那數十億個參數的梯度怎麼算？靠<span class="term" title="Backpropagation">反向傳播</span>：從損失往回，用連鎖律一層層算出「這個參數稍微變大，損失會變多少」——就像追查一份錯誤報告，把責任按比例分攤回每一層。</p>
+
+      <figure class="plate" id="fig-6-2" tabindex="-1">
+        <div class="plate-head">
+          <span class="plate-fig">FIG 6.2</span>
+          <h3 class="plate-title">調整學習率，讓點沿著梯度走到谷底</h3>
+          <span class="plate-hint">調整 → 開始</span>
+        </div>
+        <div class="plate-stage">
+          <div class="stage-split">
+            <svg id="gd-svg" viewBox="0 0 600 400" role="img" aria-label="損失地形等高線與梯度下降軌跡"></svg>
+            <div class="readout">
+              <dl>
+                <dt>學習率 η</dt><dd id="gd-lr">0.080</dd>
+                <dt>步數</dt><dd id="gd-step">0</dd>
+                <dt>損失</dt><dd id="gd-loss">6.53</dd>
+              </dl>
+              <p class="gd-status" id="gd-status" data-s="">尚未開始</p>
+              <p class="meta-label" style="margin:var(--s-3) 0 var(--s-1)">損失（對數刻度）</p>
+              <svg id="lc-svg" viewBox="0 0 260 150" role="img" aria-label="損失隨步數下降的折線圖"></svg>
+            </div>
+          </div>
+        </div>
+        <div class="plate-controls">
+          <div>
+            <div class="field">
+              <label for="gd-range" style="text-transform:none">學習率 η</label>
+              <input type="range" id="gd-range" min="0.01" max="0.25" step="0.005" value="0.08">
+              <output for="gd-range" id="gd-out">0.080</output>
+            </div>
+          </div>
+          <div class="seg" role="group" aria-label="學習率預設">
+            <button type="button" data-lr="0.02" aria-pressed="false">太小</button>
+            <button type="button" data-lr="0.08" aria-pressed="true">穩健</button>
+            <button type="button" data-lr="0.205" aria-pressed="false">臨界</button>
+            <button type="button" data-lr="0.24" aria-pressed="false">太大</button>
+          </div>
+          <span class="spacer"></span>
+          <button class="btn btn-primary btn-sm" type="button" id="gd-go"><svg viewBox="0 0 14 14"><path d="M4 2.5v9l7-4.5z" fill="currentColor"/></svg><span>開始</span></button>
+          <button class="btn btn-ghost btn-sm" type="button" id="gd-reset">重設</button>
+        </div>
+        <p class="plate-narr" id="gd-narr"></p>
+        <p class="plate-cap">地形是一個刻意拉長的碗：沿著斜對角方向很平緩，另一個方向很陡。真實的損失地形有數十億個維度，但「陡的方向容易震盪、平的方向走得慢」這個現象是一樣的——這也是 Adam 等最佳化器與學習率排程存在的原因。</p>
+      </figure>
+
+      <div class="note">
+        <span class="meta-label">註</span>
+        <p>實務上不會一次看完整份資料才走一步，而是每次抽一小批（mini-batch）估計梯度，稱為隨機梯度下降（SGD）。大型模型通常搭配 AdamW 最佳化器，並在訓練初期「暖身」逐步調高學習率、後期再慢慢降低。</p>
+      </div>
+
+      <h2 id="pipeline"><span class="sec">§ 6.3</span>從預訓練到對齊</h2>
+      <p>只靠「猜下一個字」訓練出來的模型很博學，但它只會<em>續寫</em>：你問它問題，它可能接著寫出更多問題。要變成能對話的助手，現代 LLM 通常經過三個階段：</p>
+      <ol>
+        <li><strong>預訓練</strong>（Pretraining）——在數兆 token 的網頁、書籍、程式碼上預測下一個 token，學到語言與世界知識。佔掉絕大部分的算力。</li>
+        <li><strong>指令微調</strong>（Supervised Fine-Tuning, SFT）——用人工撰寫的「指令 → 回答」示範繼續訓練，學會對話的格式與角色。</li>
+        <li><strong>偏好對齊</strong>——讓人比較兩個回答哪個較好。<strong>RLHF</strong> 先用這些比較訓練一個<span class="term" title="Reward Model">獎勵模型</span>替回答打分，再用強化學習提高分數；<strong>DPO</strong> 則跳過獎勵模型，直接用偏好對調整機率。</li>
+      </ol>
+
+      <figure class="plate" id="fig-6-3" tabindex="-1">
+        <div class="plate-head">
+          <span class="plate-fig">FIG 6.3</span>
+          <h3 class="plate-title">同一個提問，在每個訓練階段後的回答</h3>
+          <span class="plate-hint">← → 鍵切換步驟</span>
+        </div>
+        <div class="plate-stage">
+          <ol class="pipe" id="pipe">
+            <li><span class="pipe-n">00</span><b>隨機初始化</b><small>Random init</small></li>
+            <li><span class="pipe-n">01</span><b>預訓練</b><small>Pretraining</small></li>
+            <li><span class="pipe-n">02</span><b>指令微調</b><small>SFT</small></li>
+            <li><span class="pipe-n">03</span><b>偏好對齊</b><small>RLHF / DPO</small></li>
+          </ol>
+          <div class="pipe-panels">
+            <section class="pp" aria-label="訓練資料樣態">
+              <p class="meta-label">這一階段吃的資料</p>
+              <div class="pp-body" id="pp-data"></div>
+            </section>
+            <section class="pp" aria-label="模型回答">
+              <p class="meta-label">訓練後的回答</p>
+              <p class="pp-prompt">使用者：幫我寫一句生日祝福給媽媽。</p>
+              <div id="pp-ans"></div>
+            </section>
+          </div>
+        </div>
+        <div class="plate-controls">
+          <button class="btn btn-ghost btn-sm" type="button" data-step="prev" aria-label="上一步"><svg viewBox="0 0 14 14"><path d="M9 2 4 7l5 5"/></svg></button>
+          <button class="btn btn-primary btn-sm" type="button" data-step="play" aria-pressed="false"><svg viewBox="0 0 14 14"><path d="M4 2.5v9l7-4.5z" fill="currentColor"/></svg><span class="lbl">播放</span></button>
+          <button class="btn btn-ghost btn-sm" type="button" data-step="next" aria-label="下一步"><svg viewBox="0 0 14 14"><path d="m5 2 5 5-5 5"/></svg></button>
+          <ol class="steps"></ol>
+          <span class="step-count"></span>
+          <span class="spacer"></span>
+          <button class="btn btn-ghost btn-sm" type="button" data-step="reset">重設</button>
+        </div>
+        <p class="plate-narr"></p>
+        <p class="plate-cap">回答內容為示意。各階段的資料規模是常見的數量級，不同模型差異很大；有些流程會反覆進行 SFT 與偏好對齊數輪。</p>
+      </figure>
+
+      <h2 id="scaling"><span class="sec">§ 6.4</span>規模定律：越大越好，但有規律</h2>
+      <p>2020 年起的一系列研究發現：只要資料與算力跟得上，模型的損失會隨著<strong>參數量 N</strong>、<strong>資料量 D</strong>、<strong>算力 C</strong> 以冪次律平滑下降——在對數座標上幾乎是一條直線。</p>
+      <div class="formula" role="math" aria-label="Loss of N approximately equals N c over N to the power alpha">
+        Loss(<var>N</var>) ≈ (<var>N</var><sub>c</sub> / <var>N</var>)<sup><var>α</var></sup><br>
+        <span class="cmt">// 參數每放大 10 倍，損失按固定比例下降（α 約 0.07，示意）</span>
+      </div>
+      <figure class="plate" id="fig-6-4" tabindex="-1">
+        <div class="plate-head">
+          <span class="plate-fig">FIG 6.4</span>
+          <h3 class="plate-title">對數座標下的規模定律（示意）</h3>
+          <span class="plate-hint">捲動到此自動繪製</span>
+        </div>
+        <div class="plate-stage" style="min-height:0">
+          <svg id="sc-svg" class="stage-svg" viewBox="0 0 640 240" role="img" aria-label="損失對參數量的對數座標圖，呈現平滑下降的直線"></svg>
+        </div>
+        <p class="plate-cap">橫軸每一格是參數量放大 10 倍。這條規律讓研究者能用小模型的實驗，事先估計大模型的表現與所需算力；Chinchilla 研究進一步指出，參數與訓練 token 應該等比例一起放大（約每個參數 20 個 token）。</p>
+      </figure>
+      <p>規模定律解釋了為什麼過去幾年模型越做越大；但它描述的是<em>損失</em>，不保證某項具體能力何時出現，也不代表資料用不完——高品質文本的供給，正逐漸成為新的瓶頸。</p>
+
+      <h2 id="recap"><span class="sec">§ 6.5</span>本章重點</h2>
+      <ol class="takeaways">
+        <li>預訓練的目標只有一個：最小化預測下一個 token 的交叉熵損失 −log p。</li>
+        <li>梯度下降沿著損失下降最快的方向更新參數；反向傳播用連鎖律算出每個參數的梯度。</li>
+        <li>學習率太小走得慢，太大會震盪甚至發散；上限由最陡的方向決定，實務上用 AdamW 與學習率排程來平衡。</li>
+        <li>預訓練帶來知識，SFT 教會對話格式，RLHF / DPO 讓回答貼近人類偏好。</li>
+        <li>規模定律顯示損失隨參數、資料、算力以冪次律平滑下降，讓大模型的表現可以被預估。</li>
+      </ol>
+
+      <nav class="pager" data-auto aria-label="章節翻頁"></nav>
+    </article>
+  </div>
+</main>
+
+<footer class="site-foot"><div class="site-foot-inner">
+  <p>圖解手記 · Visual Field Notes</p>
+  <p>圖版數值為教學示意</p>
+</div></footer>
+
+<script src="../assets/js/catalog.js"></script>
+<script src="../assets/js/site.js"></script>
+<script>
+(function () {
+  "use strict";
+  var S = FL.svg;
+
+  /* =========================================================
+     FIG 6.1 — 交叉熵：−log p
+     ========================================================= */
+  (function crossEntropy() {
+    var svg = document.getElementById("ce-svg");
+    var range = document.getElementById("ce-range"), out = document.getElementById("ce-out");
+    var pEl = document.getElementById("ce-p"), lossEl = document.getElementById("ce-loss"), narr = document.getElementById("ce-narr");
+    var X0 = 56, X1 = 580, Y0 = 270, Y1 = 20, YMAX = 5;
+    function px(p) { return X0 + p * (X1 - X0); }
+    function py(l) { return Y0 - Math.min(l, YMAX) / YMAX * (Y0 - Y1); }
+
+    // 軸與格線
+    for (var l = 0; l <= YMAX; l++) {
+      S("line", { class: l === 0 ? "ax-line" : "ax-grid", x1: X0, x2: X1, y1: py(l), y2: py(l) }, svg);
+      S("text", { class: "ax-t", x: X0 - 10, y: py(l) + 4, "text-anchor": "end", text: l }, svg);
+    }
+    [0, 0.25, 0.5, 0.75, 1].forEach(function (p) {
+      S("text", { class: "ax-t", x: px(p), y: Y0 + 18, "text-anchor": "middle", text: p }, svg);
+    });
+    S("line", { class: "ax-line", x1: X0, x2: X0, y1: Y1, y2: Y0 }, svg);
+    S("text", { class: "ax-title", x: X1, y: Y0 + 36, "text-anchor": "end", text: "正確答案的機率 p →" }, svg);
+    S("text", { class: "ax-title", x: X0, y: Y1 - 6, text: "損失 −log p" }, svg);
+
+    var d = "", first = true;
+    for (var i = 0; i <= 200; i++) {
+      var p = 0.0067 + i / 200 * (1 - 0.0067);
+      d += (first ? "M" : " L") + px(p).toFixed(1) + " " + py(-Math.log(p)).toFixed(1);
+      first = false;
+    }
+    var curve = S("path", { class: "ce-curve", d: d }, svg);
+    var gx = S("line", { class: "ce-guide" }, svg), gy = S("line", { class: "ce-guide" }, svg);
+    var dot = S("circle", { class: "ce-dot", r: 7 }, svg);
+    var dotLbl = S("text", { class: "ce-dot-lbl" }, svg);
+    FL.inView(svg, function () { FL.drawIn(curve); });
+
+    var CANDS = ["墊子", "地板", "沙發", "屋頂", "其他"], SHARE = [0, 0.4, 0.3, 0.18, 0.12];
+    var list = document.getElementById("ce-cand");
+    var rows = CANDS.map(function (c, k) {
+      var li = FL.el("li", { class: k === 0 ? "ok" : "" }, list);
+      FL.el("span", { text: c }, li);
+      var b = FL.el("span", { class: "b" }, li), bi = FL.el("i", {}, b);
+      var pp = FL.el("span", { class: "p" }, li);
+      return { bi: bi, p: pp };
+    });
+
+    function update(first) {
+      var p = parseFloat(range.value), loss = -Math.log(p);
+      out.textContent = p.toFixed(2);
+      pEl.textContent = p.toFixed(2);
+      FL.ticker(lossEl, loss, { duration: 260, instant: first });
+      var x = px(p), y = py(loss);
+      dot.setAttribute("cx", x); dot.setAttribute("cy", y);
+      gx.setAttribute("x1", x); gx.setAttribute("x2", x); gx.setAttribute("y1", y); gx.setAttribute("y2", Y0);
+      gy.setAttribute("x1", X0); gy.setAttribute("x2", x); gy.setAttribute("y1", y); gy.setAttribute("y2", y);
+      dotLbl.setAttribute("x", x + 12); dotLbl.setAttribute("y", y - 10);
+      dotLbl.setAttribute("text-anchor", p > 0.8 ? "end" : "start");
+      if (p > 0.8) dotLbl.setAttribute("x", x - 12);
+      dotLbl.textContent = "(" + p.toFixed(2) + ", " + loss.toFixed(2) + ")";
+      rows.forEach(function (r, k) {
+        var v = k === 0 ? p : (1 - p) * SHARE[k];
+        r.bi.style.width = (v * 100).toFixed(1) + "%";
+        r.p.textContent = Math.round(v * 100) + "%";
+      });
+      var msg;
+      if (p < 0.1) msg = "模型幾乎沒想到「墊子」，損失高達 <b>" + loss.toFixed(2) + "</b>。曲線在這裡最陡——錯得越離譜，懲罰與學習訊號都越強。";
+      else if (p < 0.5) msg = "模型有把「墊子」列入考慮，但不是首選。損失 <b>" + loss.toFixed(2) + "</b>，梯度會把它的機率往上推、把其他候選往下壓。";
+      else if (p < 0.9) msg = "「墊子」已經是最可能的答案，損失降到 <b>" + loss.toFixed(2) + "</b>。曲線開始變平，進步的空間越來越小。";
+      else msg = "模型近乎確定，損失只剩 <b>" + loss.toFixed(2) + "</b>。再往上推幾乎不再降低損失——過度自信也沒有額外獎勵。";
+      narr.innerHTML = msg;
+    }
+    range.addEventListener("input", function () { update(false); });
+    update(true);
+  })();
+
+  /* =========================================================
+     FIG 6.2 — 梯度下降：拉長的碗形地形
+     f(u, v) = ½(A·u² + B·v²)，(u, v) 為旋轉 30° 後的座標
+     ========================================================= */
+  (function gradientDescent() {
+    var svg = document.getElementById("gd-svg"), lc = document.getElementById("lc-svg");
+    var plate = document.getElementById("fig-6-2");
+    var range = document.getElementById("gd-range"), out = document.getElementById("gd-out");
+    var lrEl = document.getElementById("gd-lr"), stepEl = document.getElementById("gd-step"), lossEl = document.getElementById("gd-loss");
+    var statusEl = document.getElementById("gd-status"), narr = document.getElementById("gd-narr");
+    var goBtn = document.getElementById("gd-go"), resetBtn = document.getElementById("gd-reset");
+
+    var A = 1, B = 9, TH = Math.PI / 6, C = Math.cos(TH), SN = Math.sin(TH);
+    var U0 = -2.4, V0 = 0.9, MAXSTEP = 90, LIMIT = 2 / B;
+    function f(u, v) { return 0.5 * (A * u * u + B * v * v); }
+    function sx(x) { return 300 + x * 100; }
+    function sy(y) { return 200 - y * 100; }
+    function toScreen(u, v) { return [sx(u * C - v * SN), sy(u * SN + v * C)]; }
+
+    var defs = S("defs", {}, svg);
+    var clip = S("clipPath", { id: "gd-clip" }, defs);
+    S("rect", { x: 0, y: 0, width: 600, height: 400 }, clip);
+    var world = S("g", { "clip-path": "url(#gd-clip)" }, svg);
+
+    // 等高線（解析解：橢圓）
+    var LEVELS = [0.08, 0.35, 1, 2, 3.5, 5.5, 8, 11, 15];
+    LEVELS.slice().reverse().forEach(function (c, k) {
+      var rx = Math.sqrt(2 * c / A) * 100, ry = Math.sqrt(2 * c / B) * 100;
+      S("ellipse", { class: "gd-contour" + (c === 0.08 ? " lv0" : ""), cx: 300, cy: 200, rx: rx.toFixed(1), ry: ry.toFixed(1), transform: "rotate(-30 300 200)", "stroke-opacity": (0.25 + 0.5 * (1 - k / LEVELS.length)).toFixed(2) }, world);
+    });
+    S("ellipse", { class: "gd-fill", cx: 300, cy: 200, rx: (Math.sqrt(0.16) * 100).toFixed(1), ry: (Math.sqrt(0.16 / 9) * 100).toFixed(1), transform: "rotate(-30 300 200)" }, world);
+    S("path", { class: "gd-min", d: "M294 200 h12 M300 194 v12" }, world);
+    S("text", { class: "gd-lbl", x: 310, y: 222, text: "最低點" }, world);
+
+    var path = S("path", { class: "gd-path" }, world);
+    var pts = S("g", { class: "gd-pts" }, world);
+    var s0 = toScreen(U0, V0);
+    S("circle", { class: "gd-start", cx: s0[0], cy: s0[1], r: 9 }, world);
+    S("text", { class: "gd-lbl", x: s0[0] - 8, y: s0[1] + 26, text: "起點" }, world);
+    var ball = S("circle", { class: "gd-ball", r: 7, cx: s0[0], cy: s0[1] }, world);
+    S("rect", { x: 0.5, y: 0.5, width: 599, height: 399, fill: "none", stroke: "var(--rule)" }, svg);
+
+    // 損失小圖
+    var LX0 = 34, LX1 = 252, LY0 = 132, LY1 = 8, LMIN = -4, LMAX = 2;
+    function lx(i) { return LX0 + i / MAXSTEP * (LX1 - LX0); }
+    function ly(loss) { var g = Math.log10(Math.max(loss, 1e-4)); return LY0 - (FL.clamp(g, LMIN, LMAX) - LMIN) / (LMAX - LMIN) * (LY0 - LY1); }
+    S("rect", { class: "lc-box", x: LX0, y: LY1, width: LX1 - LX0, height: LY0 - LY1 }, lc);
+    [2, 0, -2, -4].forEach(function (g) {
+      S("line", { class: "ax-grid", x1: LX0, x2: LX1, y1: ly(Math.pow(10, g)), y2: ly(Math.pow(10, g)) }, lc);
+      S("text", { class: "ax-t", x: LX0 - 4, y: ly(Math.pow(10, g)) + 4, "text-anchor": "end", text: "1e" + g, style: "font-size:9px" }, lc);
+    });
+    S("text", { class: "ax-t", x: LX1, y: LY0 + 14, "text-anchor": "end", text: "步數 →", style: "font-size:9px" }, lc);
+    var lcLine = S("path", { class: "lc-line" }, lc);
+
+    var timer = null, traj = [], lossTrail = [], k = 0;
+
+    function classify(lr) {
+      if (lr >= LIMIT) return "div";
+      if (lr > 0.17) return "osc";
+      if (lr < 0.04) return "slow";
+      return "ok";
+    }
+    var STATUS = { ok: "穩定收斂", slow: "收斂很慢", osc: "震盪中收斂", div: "發散！" };
+    var NARR = {
+      ok: "學習率<b>穩健</b>：陡的方向一兩步就降下來，接著沿著平緩的谷底穩定滑向最低點，軌跡平順、沒有來回彈跳。",
+      slow: "學習率<b>太小</b>：每一步都踏得很保守，跑完 " + MAXSTEP + " 步仍停在半山腰——訓練時間全浪費在龜速前進。",
+      osc: "學習率<b>接近臨界</b>：在陡峭方向來回彈跳、畫出鋸齒；但平緩方向因為步伐大反而走得更快。這就是學習率的兩難——上限由<b>最陡</b>的方向決定（這裡是 2/9 ≈ 0.222），再大一點點就會發散。",
+      div: "學習率<b>太大</b>：每一步都越過谷底、跳到對面更高的地方，越跳越遠——損失爆炸，訓練失敗。這就是實務上常見的 loss 變成 NaN。"
+    };
+
+    function compute(lr) {
+      var u = U0, v = V0, t = [[u, v]], ls = [f(u, v)];
+      for (var i = 0; i < MAXSTEP; i++) {
+        u = u * (1 - lr * A); v = v * (1 - lr * B);
+        t.push([u, v]); ls.push(f(u, v));
+        if (Math.abs(v) > 4 || f(u, v) < 1e-4) break;
+      }
+      return { t: t, l: ls };
+    }
+
+    function draw(n) {
+      var d = "";
+      while (pts.firstChild) pts.removeChild(pts.firstChild);
+      for (var i = 0; i <= n; i++) {
+        var p = toScreen(traj[i][0], traj[i][1]);
+        d += (i ? " L" : "M") + p[0].toFixed(1) + " " + p[1].toFixed(1);
+        if (i > 0) S("circle", { cx: p[0].toFixed(1), cy: p[1].toFixed(1), r: 2.2 }, pts);
+      }
+      path.setAttribute("d", d);
+      var last = toScreen(traj[n][0], traj[n][1]);
+      ball.setAttribute("cx", last[0]); ball.setAttribute("cy", last[1]);
+      var ld = "";
+      for (var j = 0; j <= n; j++) ld += (j ? " L" : "M") + lx(j).toFixed(1) + " " + ly(lossTrail[j]).toFixed(1);
+      lcLine.setAttribute("d", ld);
+      stepEl.textContent = n;
+      var loss = lossTrail[n];
+      lossEl.textContent = loss > 999 ? loss.toExponential(1) : loss.toFixed(loss < 0.01 ? 4 : 2);
+    }
+
+    function stop() { clearInterval(timer); timer = null; goBtn.disabled = false; }
+
+    function reset(msg) {
+      stop();
+      var lr = parseFloat(range.value);
+      var r = compute(lr); traj = r.t; lossTrail = r.l; k = 0;
+      draw(0);
+      statusEl.textContent = "尚未開始"; statusEl.dataset.s = "";
+      narr.innerHTML = msg || "按下<b>開始</b>，點會沿著梯度的反方向走。先試「穩健」，再試「太小」「臨界」「太大」比較軌跡。";
+    }
+
+    function finish() {
+      var c = classify(parseFloat(range.value));
+      statusEl.textContent = STATUS[c]; statusEl.dataset.s = c;
+      narr.innerHTML = NARR[c];
+    }
+
+    function run() {
+      reset();
+      goBtn.disabled = true;
+      if (FL.reducedMotion()) { k = traj.length - 1; draw(k); finish(); stop(); return; }
+      statusEl.textContent = "下降中…"; statusEl.dataset.s = "";
+      timer = setInterval(function () {
+        k++;
+        draw(k);
+        if (k >= traj.length - 1) { stop(); finish(); }
+      }, 55);
+    }
+
+    function setLr(v, fromSeg) {
+      range.value = v;
+      var lr = parseFloat(range.value);
+      out.textContent = lr.toFixed(3);
+      lrEl.textContent = lr.toFixed(3);
+      plate.querySelectorAll("[data-lr]").forEach(function (b) {
+        b.setAttribute("aria-pressed", Math.abs(parseFloat(b.dataset.lr) - lr) < 1e-9 ? "true" : "false");
+      });
+      reset();
+    }
+
+    range.addEventListener("input", function () { setLr(range.value); });
+    plate.querySelectorAll("[data-lr]").forEach(function (b) {
+      b.addEventListener("click", function () { setLr(b.dataset.lr, true); run(); });
+    });
+    goBtn.addEventListener("click", run);
+    resetBtn.addEventListener("click", function () { reset(); });
+    setLr(range.value);
+  })();
+
+  /* =========================================================
+     FIG 6.3 — 三階段訓練管線
+     ========================================================= */
+  (function pipeline() {
+    var plate = document.getElementById("fig-6-3");
+    var lis = document.querySelectorAll("#pipe li");
+    var dataEl = document.getElementById("pp-data"), ansEl = document.getElementById("pp-ans");
+
+    var STAGES = [
+      {
+        data: '<p class="pp-empty">還沒看過任何資料。數十億個參數都是隨機數。</p>' +
+              '<dl class="pp-meta"><dt>資料量</dt><dd>0</dd><dt>目標</dt><dd>—</dd></dl>',
+        ans: '<p class="pp-out garbled">罐梯 rx 量ㄅ 的的的 ⌁ 7 樣 ‡ 逗…</p>',
+        note: "輸出完全隨機：每個 token 的機率幾乎一樣。",
+        narr: "起點：一個<b>隨機初始化</b>的 Transformer。它的架構已經完整（前五章的所有零件），但參數毫無意義。"
+      },
+      {
+        data: '<p class="pp-doc">…中央氣象署表示，颱風預計明晨登陸，提醒民眾做好防颱準備並<span class="pp-next">注意</span></p>' +
+              '<p class="pp-note">把下一個 token 遮住，讓模型猜；猜完再往後移一格，重複數兆次。</p>' +
+              '<dl class="pp-meta"><dt>資料量</dt><dd>數兆 token（網頁、書籍、程式碼）</dd><dt>目標</dt><dd>預測下一個 token</dd></dl>',
+        ans: '<p class="pp-out">幫我寫一句生日祝福給爸爸。幫我寫一句生日祝福給老師。#生日祝福語 #大全 …</p>',
+        note: "語言流暢、知識豐富，但只會「續寫」：它把提問當成一份文件的開頭。",
+        narr: "<b>預訓練</b>吃下網路規模的文本，學到語法、事實與推理模式，耗掉整個流程九成以上的算力。但它還不是助手。"
+      },
+      {
+        data: '<div class="pp-pair"><p><span class="meta-label">指令</span>把這句翻成英文：今天天氣很好。</p>' +
+              '<p><span class="meta-label">示範回答</span>The weather is nice today.</p></div>' +
+              '<dl class="pp-meta"><dt>資料量</dt><dd>數萬～數十萬組人工示範</dd><dt>目標</dt><dd>仍是預測下一個 token，只是換成對話資料</dd></dl>',
+        ans: '<p class="pp-out">媽媽，生日快樂！祝您身體健康、天天開心。</p>',
+        note: "學會了對話的格式：讀懂指令，然後給出回答。",
+        narr: "<b>指令微調 SFT</b> 用「指令 → 回答」的示範繼續訓練。資料量小得多，卻讓模型的行為從續寫轉為回應。"
+      },
+      {
+        data: '<div class="pp-pair"><p class="rejected"><span class="meta-label">回答 B</span>生日快樂。</p>' +
+              '<p class="chosen"><span class="meta-label">回答 A ✓ 人類較偏好</span>媽媽，生日快樂！謝謝您一直以來的照顧……</p></div>' +
+              '<dl class="pp-meta"><dt>資料量</dt><dd>數萬～數十萬組偏好比較</dd><dt>目標</dt><dd>RLHF：獎勵模型打分 → 強化學習提高分數<br>DPO：直接提高 A、降低 B 的機率</dd></dl>',
+        ans: '<p class="pp-out">媽媽，生日快樂！謝謝您這些年的照顧與包容，願您新的一歲多一點屬於自己的時間，也多一點笑容。</p>',
+        note: "更貼心、更符合人的期待——但知識本身幾乎都來自預訓練。",
+        narr: "<b>偏好對齊</b>讓人比較兩個回答。模型學到的不是新知識，而是「哪一種回答比較有幫助、誠實、無害」。"
+      }
+    ];
+
+    function swap(el, html) {
+      el.innerHTML = html;
+      Array.prototype.forEach.call(el.children, function (c, k) {
+        c.classList.add("reveal-mask");
+        c.style.transitionDelay = (k * 70) + "ms";
+        c.getBoundingClientRect();
+        requestAnimationFrame(function () { c.classList.add("is-in"); });
+      });
+    }
+
+    FL.stepper(plate, {
+      steps: STAGES.map(function (s) { return { narr: s.narr }; }),
+      autoplay: 3600,
+      render: function (i) {
+        lis.forEach(function (li, j) {
+          li.className = j < i ? "done" : j === i ? "now" : "";
+          if (j === i) li.setAttribute("aria-current", "step"); else li.removeAttribute("aria-current");
+        });
+        swap(dataEl, STAGES[i].data);
+        swap(ansEl, STAGES[i].ans + '<p class="pp-note">' + STAGES[i].note + "</p>");
+      }
+    });
+  })();
+
+  /* =========================================================
+     FIG 6.4 — 規模定律（對數座標示意）
+     ========================================================= */
+  (function scaling() {
+    var svg = document.getElementById("sc-svg");
+    var X0 = 70, X1 = 610, Y0 = 200, Y1 = 20;
+    var NS = [7, 8, 9, 10, 11, 12]; // log10 參數量
+    var NC = 8.8e13, ALPHA = 0.076;
+    function loss(lg) { return Math.pow(NC / Math.pow(10, lg), ALPHA); }
+    var LMIN = 1.2, LMAX = 3.6;
+    function px(lg) { return X0 + (lg - 7) / 5 * (X1 - X0); }
+    function py(l) { return Y0 - (l - LMIN) / (LMAX - LMIN) * (Y0 - Y1); }
+    S("line", { class: "ax-line", x1: X0, x2: X1, y1: Y0, y2: Y0 }, svg);
+    S("line", { class: "ax-line", x1: X0, x2: X0, y1: Y1, y2: Y0 }, svg);
+    var LBL = { 7: "10M", 8: "100M", 9: "1B", 10: "10B", 11: "100B", 12: "1T" };
+    NS.forEach(function (lg) {
+      S("line", { class: "ax-grid", x1: px(lg), x2: px(lg), y1: Y1, y2: Y0 }, svg);
+      S("text", { class: "ax-t", x: px(lg), y: Y0 + 18, "text-anchor": "middle", text: LBL[lg] }, svg);
+    });
+    [1.5, 2, 2.5, 3, 3.5].forEach(function (l) {
+      S("text", { class: "ax-t", x: X0 - 10, y: py(l) + 4, "text-anchor": "end", text: l.toFixed(1) }, svg);
+    });
+    S("text", { class: "ax-title", x: X1, y: Y0 + 36, "text-anchor": "end", text: "參數量 N（對數）→" }, svg);
+    S("text", { class: "ax-title", x: X0, y: Y1 - 6, text: "測試損失" }, svg);
+    var d = "";
+    for (var lg = 7; lg <= 12.001; lg += 0.1) d += (lg === 7 ? "M" : " L") + px(lg).toFixed(1) + " " + py(loss(lg)).toFixed(1);
+    var line = S("path", { class: "sc-line", d: d }, svg);
+    var dots = NS.map(function (lg) { var c = S("circle", { class: "sc-pt", cx: px(lg), cy: py(loss(lg)), r: 4.5, opacity: 0 }, svg); c.style.transition = "opacity 240ms linear"; return c; });
+    FL.inView(svg, function () {
+      FL.drawIn(line);
+      dots.forEach(function (c, k) { setTimeout(function () { c.setAttribute("opacity", 1); }, FL.reducedMotion() ? 0 : 150 + k * 120); });
+    });
+  })();
+})();
+</script>
+</body>
+</html>
