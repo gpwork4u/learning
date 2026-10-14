@@ -1,0 +1,694 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>嵌入向量 · LLM 理論 · 圖解手記</title>
+<meta name="description" content="用可操作的圖版理解 Embedding：token ID 如何查表變成向量、語意如何變成距離、位置資訊從哪裡來。">
+<script>try{var t=localStorage.getItem("fl-theme");if(t)document.documentElement.setAttribute("data-theme",t)}catch(e){}</script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,300..700;1,9..144,400&family=JetBrains+Mono:wght@400;500;600&family=Noto+Sans+TC:wght@400;500;700&family=Noto+Serif+TC:wght@700&display=swap">
+<link rel="stylesheet" href="../assets/css/site.css">
+<style>
+  /* ---- 本章圖版樣式 ---- */
+  .col-t { font: 600 11px var(--f-mono); fill: var(--text-muted); letter-spacing: .08em; }
+  .mono-t { font: 500 12px var(--f-mono); fill: var(--text-muted); dominant-baseline: central; }
+
+  /* FIG 2.1 查表 */
+  .lk-chip rect { fill: var(--surface-page); stroke: var(--rule-strong); stroke-width: 1; transition: fill var(--dur-2) linear; }
+  .lk-chip text { font: 500 15px var(--f-body); fill: var(--text); text-anchor: middle; dominant-baseline: central; transition: fill var(--dur-2) linear; }
+  .lk-chip.done rect { fill: var(--surface-sunken); }
+  .lk-chip.on rect { fill: var(--data-q); stroke: var(--data-q); }
+  .lk-chip.on text { fill: var(--surface-page); }
+  .lk-row { transition: opacity var(--dur-3) var(--ease-out); }
+  .lk-hi { fill: var(--accent-soft); stroke: var(--accent); stroke-width: 1.5; transition: y var(--dur-3) var(--ease-out), opacity var(--dur-2) linear; }
+  .lk-link { fill: none; stroke: var(--data-q); stroke-width: 1.5; transition: opacity var(--dur-2) linear; }
+  .lk-copy { fill: none; stroke: var(--accent); stroke-width: 1.2; stroke-dasharray: 4 4; transition: opacity var(--dur-2) linear; }
+  .lk-out { transition: transform 700ms var(--ease-out), opacity var(--dur-2) linear; }
+  .lk-fade { transition: opacity var(--dur-3) var(--ease-out); }
+
+  /* FIG 2.2 語意地圖 */
+  .map-axis { stroke: var(--rule); stroke-width: 1; }
+  .map-clu { font: 600 11px var(--f-mono); fill: var(--text-faint); letter-spacing: .1em; text-anchor: middle; }
+  .map-pt { cursor: pointer; outline: none; }
+  .map-pt circle { fill: var(--text); stroke: var(--surface-raised); stroke-width: 2; transition: r var(--dur-2) var(--ease-out), fill var(--dur-1) linear; }
+  .map-pt text { font: 500 14px var(--f-body); fill: var(--text); dominant-baseline: central; paint-order: stroke; stroke: var(--surface-raised); stroke-width: 4px; stroke-linejoin: round; }
+  .map-pt:hover circle { r: 7; }
+  .map-pt:focus-visible circle { stroke: var(--focus); stroke-width: 3; }
+  .map-pt.sel-a circle { fill: var(--data-q); r: 7; }
+  .map-pt.sel-b circle { fill: var(--data-v); r: 7; }
+  .map-pt.is-target circle { fill: var(--accent); r: 7; }
+  .map-pt.is-dim { opacity: .35; }
+  .map-angle { fill: none; stroke: var(--data-hi); stroke-width: 2; transition: opacity var(--dur-2) linear; }
+  .map-angle-t { font: 600 12px var(--f-mono); fill: var(--text); paint-order: stroke; stroke: var(--surface-raised); stroke-width: 4px; }
+  .map-ring { fill: none; stroke: var(--accent); stroke-width: 1.6; stroke-dasharray: 3 3; transition: opacity var(--dur-3) linear; }
+  .map-par { fill: none; stroke: var(--text-faint); stroke-width: 1.2; stroke-dasharray: 2 4; transition: opacity var(--dur-3) linear; }
+  .arw-head { transition: opacity var(--dur-2) linear; }
+  .map-grp { transition: opacity var(--dur-2) linear; }
+  .map-grp.off { opacity: 0; pointer-events: none; }
+  .gauge { position: relative; height: 10px; background: var(--surface-sunken); margin: var(--s-2) 0 var(--s-1); }
+  .gauge::after { content: ""; position: absolute; left: 50%; top: -3px; bottom: -3px; width: 1px; background: var(--text-faint); }
+  .gauge i { position: absolute; top: -4px; width: 3px; height: 18px; background: var(--data-hi); left: 50%; transition: left var(--dur-3) var(--ease-out); }
+  .gauge-lab { display: flex; justify-content: space-between; font: 500 .68rem var(--f-mono); color: var(--text-faint); }
+  .near-list { list-style: none; margin: var(--s-2) 0 0; padding: 0; display: grid; gap: 4px; }
+  .near-list li { display: grid; grid-template-columns: 1.6em 1fr auto; gap: var(--s-2); font-size: .86rem; padding-bottom: 4px; border-bottom: 1px solid var(--rule); }
+  .near-list li span:first-child { font: 500 .72rem/1.9 var(--f-mono); color: var(--text-faint); }
+  .near-list li span:last-child { font: 500 .8rem/1.7 var(--f-mono); font-variant-numeric: tabular-nums; }
+  .near-list li.top { color: var(--accent); font-weight: 700; }
+  .arith-ctl { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s-3); }
+  .arith-eq { font: 500 .86rem/1.6 var(--f-mono); margin: 0; }
+  .arith-eq .q { color: var(--data-q); } .arith-eq .k { color: var(--data-k); } .arith-eq .v { color: var(--data-v); }
+
+  /* FIG 2.3 位置編碼 */
+  .pe-cell { stroke: none; }
+  .pe-hi { fill: none; stroke: var(--rule-strong); stroke-width: 2; transition: y var(--dur-2) var(--ease-out); pointer-events: none; }
+  .pe-bar { transition: y var(--dur-3) var(--ease-out), height var(--dur-3) var(--ease-out), fill var(--dur-2) linear; }
+  .pe-lab { font: 500 10.5px var(--f-mono); fill: var(--text-muted); dominant-baseline: central; }
+  .pe-lab.on { fill: var(--text); font-weight: 700; }
+
+  .jump-btn { margin: 0 0 var(--s-4); }
+  #fig-2-2 .stage-scroll > svg { min-width: 460px; }
+</style>
+</head>
+<body data-track="llm" data-chapter="02">
+<a class="skip-link" href="#main">跳到主要內容</a>
+<header class="masthead"><div class="masthead-inner">
+  <a class="brand" href="../index.html">
+    <svg class="brand-mark" viewBox="0 0 26 26" aria-hidden="true"><rect class="bm-frame" x="1" y="1" width="24" height="24"/><path class="bm-line" d="M1 19 L9 12 L15 16 L25 6"/><circle class="bm-dot" cx="15" cy="16" r="2.6"/></svg>
+    <span class="brand-name">圖解手記<small>Visual Field Notes</small></span>
+  </a>
+  <nav class="site-nav" aria-label="主要">
+    <a href="../index.html#categories" class="nav-optional">分類</a>
+    <a href="index.html" class="is-current">LLM 理論</a>
+    <a href="../preview.html" class="nav-optional">元件</a>
+  </nav>
+  <button class="theme-toggle" type="button" aria-label="切換主題"><svg viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="6"/><path d="M8 2a6 6 0 0 0 0 12z" fill="currentColor"/></svg></button>
+</div></header>
+
+<main id="main" class="page">
+  <ol class="crumbs">
+    <li><a href="../index.html">圖解手記</a></li>
+    <li><a href="index.html">01 LLM 理論</a></li>
+    <li aria-current="page">第 02 章</li>
+  </ol>
+
+  <header class="chapter-head">
+    <p class="chapter-num" aria-hidden="true">0<span class="num-accent">2</span></p>
+    <div>
+      <p class="meta-label">LLM 理論 · 第 02 章</p>
+      <h1 class="chapter-title">嵌入向量<span class="en">Embedding</span></h1>
+      <p class="chapter-deck">token ID 只是字典裡的編號，本身沒有意義。這一章看模型如何把編號「查表」換成一串數字，讓意思相近的詞在空間中彼此靠近，再替每個位置蓋上座標章。</p>
+      <ul class="chapter-meta">
+        <li>閱讀 <b>11 分鐘</b></li>
+        <li>互動圖版 <b>3</b></li>
+        <li>先備 <b>第 01 章 分詞</b></li>
+      </ul>
+    </div>
+  </header>
+
+  <div class="chapter-body">
+    <aside class="rail" aria-label="本章導覽">
+      <div class="rail-inner">
+        <div>
+          <p class="meta-label">本章目錄</p>
+          <ol class="toc"></ol>
+        </div>
+        <div class="rail-figs-wrap">
+          <p class="meta-label">圖版</p>
+          <ul class="rail-figs"></ul>
+        </div>
+      </div>
+    </aside>
+
+    <article class="prose">
+      <h2 id="lookup"><span class="sec">§ 2.1</span>從編號到向量：查表</h2>
+      <p class="lede">經過第 01 章的分詞，「我喜歡喝咖啡」變成了一串整數，例如 <code>[2385, 10421, 6789, 31842]</code>。但 31842 並不比 2385「大」或「更重要」——它們只是字典裡的頁碼。</p>
+      <p>模型手上有一張<strong>嵌入矩陣</strong> E：每個 token 在裡面都有專屬的一列，列的長度 d 就是嵌入維度。「嵌入」這一步沒有任何乘法運算，就是拿 ID 當索引，把那一列<strong>取出來</strong>。以 GPT-2 為例，E 有 50,257 列、每列 768 維，光這張表就有 3,800 多萬個參數。</p>
+
+      <figure class="plate" id="fig-2-1" tabindex="-1">
+        <div class="plate-head">
+          <span class="plate-fig">FIG 2.1</span>
+          <h3 class="plate-title">拿 token ID 到嵌入矩陣裡取出對應的列</h3>
+          <span class="plate-hint">← → 鍵切換步驟</span>
+        </div>
+        <div class="plate-stage">
+          <div class="stage-scroll"><svg class="stage-svg" id="lookup-svg" viewBox="0 0 860 400" role="img" aria-label="嵌入矩陣查表動畫"></svg></div>
+          <p class="scroll-hint">← 可橫向捲動 →</p>
+        </div>
+        <div class="plate-controls">
+          <button class="btn btn-ghost btn-sm" type="button" data-step="prev" aria-label="上一步"><svg viewBox="0 0 14 14"><path d="M9 2 4 7l5 5"/></svg></button>
+          <button class="btn btn-primary btn-sm" type="button" data-step="play" aria-pressed="false"><svg viewBox="0 0 14 14"><path d="M4 2.5v9l7-4.5z" fill="currentColor"/></svg><span class="lbl">播放</span></button>
+          <button class="btn btn-ghost btn-sm" type="button" data-step="next" aria-label="下一步"><svg viewBox="0 0 14 14"><path d="m5 2 5 5-5 5"/></svg></button>
+          <ol class="steps"></ol>
+          <span class="step-count"></span>
+          <span class="spacer"></span>
+          <ul class="legend"><li style="--c:var(--data-q)"><i></i>正值</li><li style="--c:var(--data-k)"><i></i>負值</li></ul>
+          <button class="btn btn-ghost btn-sm" type="button" data-step="reset">重設</button>
+        </div>
+        <p class="plate-narr"></p>
+        <p class="plate-cap">只畫出矩陣中的 10 列、每列 8 維；格子顏色代表正負、深淺代表大小。數值為隨機示意，訓練開始時 E 確實也是隨機初始化的。</p>
+      </figure>
+
+      <div class="formula">
+        <var>x</var> = <var>E</var>[ id ] = onehot(id) · <var>E</var><br>
+        <span class="cmt">// 數學上等價於「one-hot 向量 × 矩陣」，實作上直接用索引取列，省下大量乘法</span>
+      </div>
+
+      <h2 id="space"><span class="sec">§ 2.2</span>意義就是座標：語意空間</h2>
+      <p>剛初始化時，嵌入矩陣只是一堆隨機數字。訓練過程中，模型為了更準確地預測下一個 token，會不斷微調每一列。結果是：<strong>出現在相似上下文的詞，向量會被推到相近的位置</strong>。「貓」和「狗」常出現在「餵＿吃飯」、「我家的＿很可愛」這類句子裡，於是它們的向量越來越像。</p>
+      <p>語言學家 J. R. Firth 有句名言：「<em>你可以從一個詞的鄰居認識它。</em>」這正是嵌入向量背後的<span class="term" title="Distributional Hypothesis">分布假說</span>。</p>
+      <p>要衡量兩個向量有多像，最常用的是<strong>餘弦相似度</strong>：只看方向、不看長度。方向一致為 1，垂直為 0，完全相反為 −1。</p>
+      <div class="formula" role="math" aria-label="cosine similarity of a and b equals a dot b over the norm of a times the norm of b">
+        cos θ = ( <var>a</var> · <var>b</var> ) / ( ‖<var>a</var>‖ ‖<var>b</var>‖ )
+      </div>
+
+      <figure class="plate" id="fig-2-2" tabindex="-1">
+        <div class="plate-head">
+          <span class="plate-fig">FIG 2.2</span>
+          <h3 class="plate-title">在二維語意地圖上比較詞、做向量算術</h3>
+          <span class="plate-hint">點選兩個詞</span>
+        </div>
+        <div class="plate-stage">
+          <div class="stage-split">
+            <div>
+              <div class="stage-scroll"><svg class="stage-svg" id="map-svg" viewBox="0 0 640 440" role="img" aria-label="二維語意地圖"></svg></div>
+              <p class="scroll-hint">← 可橫向捲動 →</p>
+            </div>
+            <div class="readout">
+              <div id="map-read-sim">
+                <p class="meta-label">相似度量測</p>
+                <dl>
+                  <dt style="color:var(--data-q)">A</dt><dd id="sim-a">—</dd>
+                  <dt style="color:var(--data-v)">B</dt><dd id="sim-b">—</dd>
+                  <dt>cos θ</dt><dd id="sim-cos">0.00</dd>
+                  <dt>夾角</dt><dd><span id="sim-ang">0</span>°</dd>
+                  <dt>歐氏距離</dt><dd id="sim-dist">0.00</dd>
+                </dl>
+                <div class="gauge" aria-hidden="true"><i id="sim-gauge"></i></div>
+                <div class="gauge-lab" aria-hidden="true"><span>−1 相反</span><span>0</span><span>1 相同</span></div>
+              </div>
+              <div id="map-read-arith" hidden>
+                <p class="meta-label">向量算術</p>
+                <p class="arith-eq"><span class="q">國王</span> − <span class="k">男人</span> + <span class="v">女人</span></p>
+                <dl>
+                  <dt>結果座標</dt><dd id="ar-xy">—</dd>
+                </dl>
+                <p class="meta-label" style="margin-top:var(--s-3)">離結果最近的詞</p>
+                <ul class="near-list" id="ar-near"></ul>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="plate-controls">
+          <div class="seg" role="group" aria-label="模式">
+            <button type="button" aria-pressed="true" data-mode="sim">比較相似度</button>
+            <button type="button" aria-pressed="false" data-mode="arith">向量算術</button>
+          </div>
+          <div class="arith-ctl" id="arith-ctl" hidden>
+            <button class="btn btn-ghost btn-sm" type="button" data-step="prev" aria-label="上一步"><svg viewBox="0 0 14 14"><path d="M9 2 4 7l5 5"/></svg></button>
+            <button class="btn btn-primary btn-sm" type="button" data-step="play" aria-pressed="false"><svg viewBox="0 0 14 14"><path d="M4 2.5v9l7-4.5z" fill="currentColor"/></svg><span class="lbl">播放</span></button>
+            <button class="btn btn-ghost btn-sm" type="button" data-step="next" aria-label="下一步"><svg viewBox="0 0 14 14"><path d="m5 2 5 5-5 5"/></svg></button>
+            <ol class="steps"></ol>
+            <span class="step-count"></span>
+          </div>
+          <span class="spacer"></span>
+          <ul class="legend"><li style="--c:var(--data-q)"><i></i>向量 A</li><li style="--c:var(--data-v)"><i></i>向量 B</li><li style="--c:var(--data-hi)"><i></i>夾角</li></ul>
+        </div>
+        <p class="plate-narr" id="map-narr"></p>
+        <p class="plate-cap">真實的嵌入向量有數百到數千維，這裡的二維座標是為了說明而手工擺放的示意圖；餘弦相似度以原點為基準計算。同一群的詞方向相近，因此相似度高。</p>
+      </figure>
+
+      <h2 id="arith"><span class="sec">§ 2.3</span>方向也有意義：國王 − 男人 + 女人</h2>
+      <p>2013 年 word2vec 的研究發現一個驚人的現象：嵌入空間中的<strong>方向</strong>能編碼<strong>關係</strong>。從「男人」指向「女人」的向量，和從「國王」指向「女王」的向量幾乎平行——「性別」在空間裡是一個固定的方向。</p>
+      <p>所以拿「國王」的向量，減掉「男人」、加上「女人」，落點最接近的詞就是「女王」。同樣的手法也適用於「東京 − 日本 + 法國 ≈ 巴黎」這類首都關係。</p>
+      <button class="btn jump-btn" type="button" id="jump-arith"><svg viewBox="0 0 14 14"><path d="M4 2.5v9l7-4.5z" fill="currentColor"/></svg>在 FIG 2.2 播放向量算術</button>
+      <div class="note">
+        <span class="meta-label">註</span>
+        <p>現代 LLM 的嵌入不一定像 word2vec 那樣有乾淨的線性關係，而且 token 常是半個詞或一個字。但「相近意義 → 相近向量」的直覺依然成立，後續的注意力層會在這個基礎上依上下文再加工。</p>
+      </div>
+
+      <h2 id="position"><span class="sec">§ 2.4</span>位置從哪裡來：位置編碼</h2>
+      <p>查表得到的向量只描述「這是哪個 token」，不包含「它在第幾個位置」。下一章的自注意力會把所有 token 一視同仁地兩兩比較——如果不另外提供位置資訊，「狗咬人」和「人咬狗」在模型眼中就是同一袋字。</p>
+      <p>原始 Transformer 的做法是替每個位置算出一個<strong>正弦位置編碼</strong>，直接加到嵌入向量上。不同維度用不同頻率的 sin／cos 波：前面的維度變化快，像時鐘的秒針；後面的維度變化慢，像時針。組合起來，每個位置都得到一組獨一無二的「指紋」。</p>
+      <div class="formula">
+        PE(<var>pos</var>, 2<var>i</var>)   = sin( <var>pos</var> / 10000<sup>2<var>i</var>/<var>d</var></sup> )<br>
+        PE(<var>pos</var>, 2<var>i</var>+1) = cos( <var>pos</var> / 10000<sup>2<var>i</var>/<var>d</var></sup> )<br>
+        <span class="cmt">// 模型實際的輸入：x = E[id] + PE(pos)</span>
+      </div>
+
+      <figure class="plate" id="fig-2-3" tabindex="-1">
+        <div class="plate-head">
+          <span class="plate-fig">FIG 2.3</span>
+          <h3 class="plate-title">正弦位置編碼：拖動滑桿選擇位置</h3>
+          <span class="plate-hint">拖動 / 滑過列</span>
+        </div>
+        <div class="plate-stage">
+          <div class="stage-scroll"><svg class="stage-svg" id="pe-svg" viewBox="0 0 760 500" role="img" aria-label="正弦位置編碼熱圖與相似度"></svg></div>
+          <p class="scroll-hint">← 可橫向捲動 →</p>
+        </div>
+        <div class="plate-controls">
+          <div class="field">
+            <label for="pe-pos">位置 p</label>
+            <input type="range" id="pe-pos" min="0" max="23" step="1" value="5">
+            <output for="pe-pos" id="pe-pos-out">5</output>
+          </div>
+          <button class="btn btn-ghost btn-sm" type="button" id="pe-scan" aria-pressed="false"><svg viewBox="0 0 14 14"><path d="M4 2.5v9l7-4.5z" fill="currentColor"/></svg><span class="lbl">掃描</span></button>
+          <span class="spacer"></span>
+          <ul class="legend"><li style="--c:var(--data-q)"><i></i>正值</li><li style="--c:var(--data-k)"><i></i>負值</li></ul>
+        </div>
+        <p class="plate-narr" id="pe-narr"></p>
+        <p class="plate-cap">上方熱圖：24 個位置 × 32 維（d = 32）。下方長條：所選位置與其他每個位置的餘弦相似度（縱軸從 0.4 起算，以放大差異）。許多新模型改用 RoPE（旋轉位置編碼）等相對位置方法，但「用不同頻率的波標記位置」的核心概念相同。</p>
+      </figure>
+
+      <h2 id="recap"><span class="sec">§ 2.5</span>本章重點</h2>
+      <ol class="takeaways">
+        <li>token ID 只是編號；嵌入層用它當索引，從嵌入矩陣 E 取出對應的一列向量。</li>
+        <li>嵌入矩陣是可訓練的參數，訓練後意義相近的詞會在空間中彼此靠近。</li>
+        <li>餘弦相似度只看方向，是比較兩個向量最常用的方式。</li>
+        <li>空間中的方向可以編碼關係，例如「國王 − 男人 + 女人 ≈ 女王」。</li>
+        <li>注意力本身不分先後，必須加上位置編碼，模型才知道 token 的順序。</li>
+      </ol>
+
+      <nav class="pager" data-auto aria-label="章節翻頁"></nav>
+    </article>
+  </div>
+</main>
+
+<footer class="site-foot"><div class="site-foot-inner">
+  <p>圖解手記 · Visual Field Notes</p>
+  <p>圖版數值為教學示意</p>
+</div></footer>
+
+<script src="../assets/js/catalog.js"></script>
+<script src="../assets/js/site.js"></script>
+<script>
+(function () {
+  "use strict";
+  var S = FL.svg;
+
+  function mulberry32(a) {
+    return function () {
+      a |= 0; a = a + 0x6D2B79F5 | 0;
+      var t = Math.imul(a ^ a >>> 15, 1 | a);
+      t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t;
+      return ((t ^ t >>> 14) >>> 0) / 4294967296;
+    };
+  }
+  function sub(n) { return String(n).replace(/\d/g, function (c) { return "₀₁₂₃₄₅₆₇₈₉"[c]; }); }
+
+  /* 以 stroke-dashoffset 做 Draw 效果；reduced-motion 時直接顯示 */
+  function drawStroke(p, dur) {
+    p.style.transition = "none";
+    p.style.strokeDasharray = "none";
+    p.style.strokeDashoffset = "0";
+    if (FL.reducedMotion()) return;
+    var len = Math.ceil(p.getTotalLength()) + 1;
+    p.style.strokeDasharray = len;
+    p.style.strokeDashoffset = len;
+    p.getBoundingClientRect();
+    p.style.transition = "stroke-dashoffset " + (dur || 600) + "ms var(--ease-out)";
+    p.style.strokeDashoffset = "0";
+  }
+
+  /* =========================================================
+     FIG 2.1 — 嵌入矩陣查表
+     ========================================================= */
+  (function lookup() {
+    var svg = document.getElementById("lookup-svg"), plate = document.getElementById("fig-2-1");
+    var TOK = [{ t: "我", id: 2385 }, { t: "喜歡", id: 10421 }, { t: "喝", id: 6789 }, { t: "咖啡", id: 31842 }];
+    var IDS = [3, 17, 2385, 4120, 6789, 9031, 10421, 22007, 31842, 50255];
+    var D = 8, CW = 26, CH = 20, MX = 312, OX = 612;
+    var rnd = mulberry32(20241014);
+    var E = IDS.map(function () {
+      var r = [];
+      for (var d = 0; d < D; d++) r.push(Math.round((rnd() * 2 - 1) * 100) / 100);
+      return r;
+    });
+    function tokY(k) { return 95 + k * 60; }
+    function rowY(r) { return 82 + r * 28; }
+    function rowOf(k) { return IDS.indexOf(TOK[k].id); }
+    function cellRow(parent, vals) {
+      vals.forEach(function (v, d) {
+        S("rect", { x: d * CW, y: -CH / 2, width: CW - 3, height: CH, fill: v >= 0 ? "var(--data-q)" : "var(--data-k)", "fill-opacity": (Math.abs(v) * 0.78 + 0.08).toFixed(2) }, parent);
+      });
+    }
+    function fmtVec(v) { return "[" + v.slice(0, 3).map(function (x) { return x.toFixed(2).replace("-", "−"); }).join(", ") + ", …]"; }
+
+    [["TOKEN", 16], ["ID", 100], ["嵌入矩陣 E（V × d）", MX - 60], ["輸出 X", OX - 30]].forEach(function (h) {
+      S("text", { class: "col-t", x: h[1], y: 30, text: h[0] }, svg);
+    });
+    S("line", { x1: 0, x2: 860, y1: 44, y2: 44, stroke: "var(--rule)" }, svg);
+
+    var hi = S("rect", { class: "lk-hi", x: MX - 64, y: rowY(0) - 14, width: 64 + D * CW + 6, height: 28, opacity: 0 }, svg);
+    var link = S("path", { class: "lk-link", opacity: 0 }, svg);
+    var copy = S("path", { class: "lk-copy", opacity: 0 }, svg);
+
+    var rows = IDS.map(function (id, r) {
+      var g = S("g", { class: "lk-row" }, svg);
+      S("text", { class: "mono-t", x: MX - 10, y: rowY(r), "text-anchor": "end", text: "#" + id }, g);
+      var cg = S("g", { transform: "translate(" + MX + "," + rowY(r) + ")" }, g);
+      cellRow(cg, E[r]);
+      return g;
+    });
+    S("text", { class: "mono-t", x: MX + (D * CW) / 2, y: rowY(9) + 30, "text-anchor": "middle", text: "⋮  共 50,257 列（此處只畫 10 列）" }, svg);
+
+    var chips = TOK.map(function (tk, k) {
+      var g = S("g", { class: "lk-chip" }, svg);
+      S("rect", { x: 16, y: tokY(k) - 15, width: 70, height: 30, rx: 2 }, g);
+      S("text", { x: 51, y: tokY(k), text: tk.t }, g);
+      S("text", { class: "mono-t", x: 100, y: tokY(k), text: "#" + tk.id, style: "text-anchor:start;fill:var(--text)" }, g);
+      return g;
+    });
+
+    var outs = TOK.map(function (tk, k) {
+      var lab = S("text", { class: "mono-t lk-fade", x: OX - 10, y: tokY(k), "text-anchor": "end", text: "x" + sub(k + 1), opacity: 0 }, svg);
+      var g = S("g", { class: "lk-out", opacity: 0 }, svg);
+      g.style.transform = "translate(" + OX + "px," + tokY(k) + "px)";
+      cellRow(g, E[rowOf(k)]);
+      return { g: g, lab: lab };
+    });
+
+    var brk = S("g", { class: "lk-fade", opacity: 0 }, svg);
+    var bx = OX + D * CW + 6;
+    S("path", { d: "M" + bx + " " + (tokY(0) - 14) + " h6 V " + (tokY(3) + 14) + " h-6", fill: "none", stroke: "var(--rule-strong)", "stroke-width": 1.4 }, brk);
+    S("text", { class: "mono-t", x: OX, y: tokY(3) + 40, text: "X ∈ ℝ^(4 × d)", style: "fill:var(--text);font-weight:600" }, brk);
+
+    function place(o, k, fromRow) {
+      var g = o.g;
+      var fin = "translate(" + OX + "px," + tokY(k) + "px)";
+      if (fromRow == null || FL.reducedMotion()) { g.style.transition = "none"; g.style.transform = fin; g.getBoundingClientRect(); g.style.transition = ""; return; }
+      g.style.transition = "none";
+      g.style.transform = "translate(" + MX + "px," + rowY(fromRow) + "px)";
+      g.getBoundingClientRect();
+      g.style.transition = "";
+      g.style.transform = fin;
+    }
+
+    var steps = [{ narr: "句子經過分詞變成 4 個 <b>token ID</b>。ID 只是字典裡的頁碼，數字大小沒有意義，模型還不能直接拿來計算。" }];
+    TOK.forEach(function (tk, k) {
+      steps.push({ narr: "「" + tk.t + "」的 ID 是 <b>#" + tk.id + "</b> → 直接取出 E 的第 " + tk.id + " 列，得到 x" + sub(k + 1) + " = " + fmtVec(E[rowOf(k)]) + "。" + (k === 0 ? "這一步只是索引，沒有任何乘法。" : "") });
+    });
+    steps.push({ narr: "四個向量疊成 <b>4 × d</b> 的矩陣 X，這就是送進 Transformer 的輸入。E 本身也是參數，會在訓練中跟著被更新。" });
+
+    FL.stepper(plate, {
+      steps: steps,
+      autoplay: 2200,
+      render: function (i, info) {
+        var cur = i >= 1 && i <= 4 ? i - 1 : -1;
+        chips.forEach(function (c, k) {
+          c.classList.toggle("on", k === cur);
+          c.classList.toggle("done", (cur >= 0 && k < cur) || i === 5);
+        });
+        rows.forEach(function (g, r) { g.style.opacity = cur >= 0 && r !== rowOf(cur) ? 0.3 : 1; });
+        if (cur >= 0) {
+          var ry = rowY(rowOf(cur)), ty = tokY(cur);
+          hi.setAttribute("y", ry - 14); hi.setAttribute("opacity", 1);
+          link.setAttribute("d", "M160 " + ty + " C 210 " + ty + " " + (MX - 110) + " " + ry + " " + (MX - 66) + " " + ry);
+          copy.setAttribute("d", "M" + (MX + D * CW + 4) + " " + ry + " C " + (MX + D * CW + 40) + " " + ry + " " + (OX - 70) + " " + ty + " " + (OX - 34) + " " + ty);
+          link.setAttribute("opacity", 1); copy.setAttribute("opacity", 1);
+          if (info.dir > 0) drawStroke(link, 450);
+        } else {
+          hi.setAttribute("opacity", 0); link.setAttribute("opacity", 0); copy.setAttribute("opacity", 0);
+        }
+        outs.forEach(function (o, k) {
+          var show = i === 5 || (cur >= 0 && k <= cur);
+          var wasShown = o.g.getAttribute("opacity") === "1";
+          o.g.setAttribute("opacity", show ? 1 : 0);
+          o.lab.setAttribute("opacity", show ? 1 : 0);
+          if (show && k === cur && info.dir > 0 && !wasShown) place(o, k, rowOf(k));
+          else place(o, k);
+        });
+        brk.setAttribute("opacity", i === 5 ? 1 : 0);
+      }
+    });
+  })();
+
+  /* =========================================================
+     FIG 2.2 — 二維語意地圖
+     ========================================================= */
+  var mapApi = (function semanticMap() {
+    var svg = document.getElementById("map-svg"), plate = document.getElementById("fig-2-2");
+    var narr = document.getElementById("map-narr");
+    var U = 22, OX0 = 320, OY0 = 220;
+    function X(x) { return OX0 + x * U; }
+    function Y(y) { return OY0 - y * U; }
+    var WORDS = [
+      { w: "國王", x: 6, y: 6.5 }, { w: "女王", x: 6.7, y: 2.6 }, { w: "男人", x: 1, y: 4 }, { w: "女人", x: 1.5, y: 0.3 },
+      { w: "王子", x: 4.2, y: 7.7 }, { w: "公主", x: 4.4, y: 1.0 }, { w: "男孩", x: -0.9, y: 5.3 }, { w: "女孩", x: -0.4, y: 1.4 },
+      { w: "貓", x: -7, y: 6 }, { w: "狗", x: -5.8, y: 7.3 }, { w: "老虎", x: -8.4, y: 4.6 }, { w: "獅子", x: -7.4, y: 3.4 },
+      { w: "蘋果", x: -5.6, y: -4.6 }, { w: "香蕉", x: -7.6, y: -6.2 }, { w: "葡萄", x: -4.8, y: -7.0 }, { w: "西瓜", x: -8.2, y: -4.0 },
+      { w: "台灣", x: 4.8, y: -4.8 }, { w: "日本", x: 6.9, y: -5.8 }, { w: "法國", x: 7.6, y: -3.6 }, { w: "巴西", x: 5.4, y: -7.6 }
+    ];
+    function idx(w) { for (var i = 0; i < WORDS.length; i++) if (WORDS[i].w === w) return i; return -1; }
+
+    // 軸與群組標籤
+    S("line", { class: "map-axis", x1: X(-10), x2: X(10), y1: OY0, y2: OY0 }, svg);
+    S("line", { class: "map-axis", x1: OX0, x2: OX0, y1: Y(9.4), y2: Y(-9.4) }, svg);
+    S("circle", { cx: OX0, cy: OY0, r: 3, fill: "var(--text-muted)" }, svg);
+    S("text", { class: "map-clu", x: OX0 + 18, y: OY0 + 16, text: "原點" }, svg);
+    [["動物", -7, 8.8], ["人物", 2.8, 9.0], ["水果", -6.4, -8.8], ["國家", 6.3, -9.2]].forEach(function (c) {
+      S("text", { class: "map-clu", x: X(c[1]), y: Y(c[2]), text: c[0] }, svg);
+    });
+
+    var gSim = S("g", { class: "map-grp" }, svg);
+    var gAr = S("g", { class: "map-grp off" }, svg);
+    var gPts = S("g", {}, svg);
+
+    function arrow(parent, color, dashed) {
+      var g = S("g", {}, parent);
+      var line = S("path", { fill: "none", stroke: color, "stroke-width": 2.4, "stroke-linecap": "round" }, g);
+      if (dashed) line.setAttribute("stroke-dasharray", "5 4");
+      var head = S("path", { class: "arw-head", fill: color }, g);
+      return {
+        g: g,
+        set: function (x1, y1, x2, y2, anim) {
+          var dx = x2 - x1, dy = y2 - y1, L = Math.hypot(dx, dy) || 1, ux = dx / L, uy = dy / L;
+          var ex = x2 - ux * 9, ey = y2 - uy * 9;
+          line.setAttribute("d", "M" + x1.toFixed(1) + " " + y1.toFixed(1) + " L " + ex.toFixed(1) + " " + ey.toFixed(1));
+          head.setAttribute("d", "M" + x2.toFixed(1) + " " + y2.toFixed(1) + " L " + (ex - uy * 5).toFixed(1) + " " + (ey + ux * 5).toFixed(1) + " L " + (ex + uy * 5).toFixed(1) + " " + (ey - ux * 5).toFixed(1) + " Z");
+          if (anim && !dashed && !FL.reducedMotion()) {
+            drawStroke(line, 550);
+            head.style.transition = "none"; head.style.opacity = 0; head.getBoundingClientRect();
+            head.style.transition = "opacity 160ms linear 460ms"; head.style.opacity = 1;
+          } else { head.style.transition = "none"; head.style.opacity = 1; if (!dashed) { line.style.strokeDasharray = "none"; } }
+        }
+      };
+    }
+
+    /* ---- 相似度模式 ---- */
+    var arcEl = S("path", { class: "map-angle" }, gSim);
+    var arcTxt = S("text", { class: "map-angle-t" }, gSim);
+    var arA = arrow(gSim, "var(--data-q)"), arB = arrow(gSim, "var(--data-v)");
+    var sel = [idx("貓"), idx("狗")];
+
+    var pts = WORDS.map(function (wd, i) {
+      var g = S("g", { class: "map-pt", tabindex: "0", role: "button", "aria-label": "選擇「" + wd.w + "」" }, gPts);
+      S("circle", { cx: X(wd.x), cy: Y(wd.y), r: 5 }, g);
+      S("text", { x: X(wd.x) + 9, y: Y(wd.y), text: wd.w }, g);
+      function pick() { if (mode !== "sim") return; choose(i); }
+      g.addEventListener("click", pick);
+      g.addEventListener("keydown", function (e) { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); pick(); } });
+      return g;
+    });
+
+    var elA = document.getElementById("sim-a"), elB = document.getElementById("sim-b");
+    var elCos = document.getElementById("sim-cos"), elAng = document.getElementById("sim-ang"), elDist = document.getElementById("sim-dist");
+    var gauge = document.getElementById("sim-gauge");
+
+    function choose(i) {
+      if (sel.indexOf(i) >= 0) return;
+      sel = [sel[1], i];
+      paintSim(1);
+    }
+
+    function paintSim(changed) {
+      var a = WORDS[sel[0]], b = WORDS[sel[1]];
+      pts.forEach(function (g, i) {
+        g.classList.toggle("sel-a", i === sel[0]);
+        g.classList.toggle("sel-b", i === sel[1]);
+        g.classList.remove("is-target", "is-dim");
+        g.setAttribute("aria-pressed", sel.indexOf(i) >= 0 ? "true" : "false");
+      });
+      arA.set(OX0, OY0, X(a.x), Y(a.y), changed === 0);
+      arB.set(OX0, OY0, X(b.x), Y(b.y), changed === 1);
+      var dot = a.x * b.x + a.y * b.y, na = Math.hypot(a.x, a.y), nb = Math.hypot(b.x, b.y);
+      var cos = dot / (na * nb), ang = Math.acos(FL.clamp(cos, -1, 1)) * 180 / Math.PI, dist = Math.hypot(a.x - b.x, a.y - b.y);
+      // 夾角弧
+      var R = 36;
+      var ax = OX0 + a.x / na * R, ay = OY0 - a.y / na * R, bx = OX0 + b.x / nb * R, by = OY0 - b.y / nb * R;
+      var cross = (ax - OX0) * (by - OY0) - (ay - OY0) * (bx - OX0);
+      arcEl.setAttribute("d", "M" + ax.toFixed(1) + " " + ay.toFixed(1) + " A " + R + " " + R + " 0 0 " + (cross > 0 ? 1 : 0) + " " + bx.toFixed(1) + " " + by.toFixed(1));
+      var mx = a.x / na + b.x / nb, my = a.y / na + b.y / nb, mn = Math.hypot(mx, my) || 1;
+      arcTxt.setAttribute("x", (OX0 + mx / mn * (R + 14) - 12).toFixed(1));
+      arcTxt.setAttribute("y", (OY0 - my / mn * (R + 14) + 4).toFixed(1));
+      arcTxt.textContent = "θ";
+      elA.textContent = a.w; elB.textContent = b.w;
+      FL.ticker(elCos, cos, { digits: 2 });
+      FL.ticker(elAng, ang, { digits: 0 });
+      FL.ticker(elDist, dist, { digits: 2 });
+      gauge.style.left = "calc(" + ((cos + 1) / 2 * 100).toFixed(1) + "% - 1px)";
+      var verdict = cos > 0.85 ? "方向幾乎一致——在模型眼中，它們的用法非常相似。" : cos > 0.4 ? "有些相關，但屬於不同的語意群。" : cos > -0.2 ? "幾乎垂直，彼此沒什麼關聯。" : "方向相反，出現的上下文截然不同。";
+      narr.innerHTML = "「<b>" + a.w + "</b>」與「<b>" + b.w + "</b>」的餘弦相似度是 <b>" + cos.toFixed(2) + "</b>：" + verdict + " 點選其他詞來替換。";
+    }
+
+    /* ---- 向量算術模式 ---- */
+    var K = WORDS[idx("國王")], M = WORDS[idx("男人")], W = WORDS[idx("女人")], QN = WORDS[idx("女王")];
+    var P1 = { x: K.x - M.x, y: K.y - M.y }, P2 = { x: P1.x + W.x, y: P1.y + W.y };
+    var parMW = S("path", { class: "map-par", d: "M" + X(M.x) + " " + Y(M.y) + " L " + X(W.x) + " " + Y(W.y) }, gAr);
+    var parKQ = S("path", { class: "map-par", d: "M" + X(K.x) + " " + Y(K.y) + " L " + X(QN.x) + " " + Y(QN.y) }, gAr);
+    var arK = arrow(gAr, "var(--data-q)"), arM = arrow(gAr, "var(--data-k)"), arW = arrow(gAr, "var(--data-v)");
+    var ring = S("circle", { class: "map-ring", cx: X(P2.x), cy: Y(P2.y), r: 16 }, gAr);
+    var resDot = S("circle", { cx: X(P2.x), cy: Y(P2.y), r: 3.5, fill: "var(--accent)" }, gAr);
+    var nearList = document.getElementById("ar-near"), arXY = document.getElementById("ar-xy");
+    var near = WORDS.map(function (wd, i) { return { w: wd.w, d: Math.hypot(wd.x - P2.x, wd.y - P2.y), i: i }; })
+      .filter(function (o) { return ["國王", "男人", "女人"].indexOf(o.w) < 0; })
+      .sort(function (a, b) { return a.d - b.d; }).slice(0, 3);
+
+    var arSteps = [
+      "從原點出發，先畫出「<b>國王</b>」的向量。",
+      "減去「<b>男人</b>」：從國王的終點，沿著「男人」的反方向移動。",
+      "加上「<b>女人</b>」：再沿著「女人」的方向移動，抵達一個新的點。",
+      "落點最近的詞是「<b>女王</b>」。虛線顯示「男人→女人」與「國王→女王」幾乎平行——「性別」在空間中是一個固定的方向。"
+    ];
+    var arI = 0;
+    function show(el, on) { el.style.opacity = on ? 1 : 0; }
+    function renderArith(i, info) {
+      arI = i;
+      var anim = info && info.dir > 0;
+      show(arK.g, i >= 0); show(arM.g, i >= 1); show(arW.g, i >= 2);
+      show(ring, i >= 3); show(resDot, i >= 2); show(parMW, i >= 3); show(parKQ, i >= 3);
+      arK.set(OX0, OY0, X(K.x), Y(K.y), anim && i === 0);
+      arM.set(X(K.x), Y(K.y), X(P1.x), Y(P1.y), anim && i === 1);
+      arW.set(X(P1.x), Y(P1.y), X(P2.x), Y(P2.y), anim && i === 2);
+      pts.forEach(function (g, j) {
+        var w = WORDS[j].w;
+        g.classList.remove("sel-a", "sel-b");
+        g.classList.toggle("is-target", i >= 3 && w === "女王");
+        g.classList.toggle("is-dim", ["國王", "男人", "女人", "女王"].indexOf(w) < 0);
+      });
+      arXY.textContent = i >= 2 ? "(" + P2.x.toFixed(1) + ", " + P2.y.toFixed(1) + ")" : "—";
+      nearList.innerHTML = "";
+      near.forEach(function (o, r) {
+        var li = FL.el("li", { class: r === 0 && i >= 3 ? "top" : "" }, nearList);
+        FL.el("span", { text: String(r + 1).padStart(2, "0") }, li);
+        FL.el("span", { text: i >= 3 ? o.w : "？" }, li);
+        FL.el("span", { text: i >= 3 ? "d = " + o.d.toFixed(2) : "" }, li);
+      });
+      if (mode === "arith") narr.innerHTML = arSteps[i];
+    }
+    var arStepper = FL.stepper(document.getElementById("arith-ctl"), {
+      steps: arSteps.map(function () { return {}; }),
+      autoplay: 1600,
+      render: renderArith
+    });
+
+    /* ---- 模式切換 ---- */
+    var mode = "sim";
+    var readSim = document.getElementById("map-read-sim"), readAr = document.getElementById("map-read-arith"), arCtl = document.getElementById("arith-ctl");
+    function setMode(m) {
+      mode = m;
+      plate.querySelectorAll("[data-mode]").forEach(function (b) { b.setAttribute("aria-pressed", b.dataset.mode === m ? "true" : "false"); });
+      gSim.classList.toggle("off", m !== "sim");
+      gAr.classList.toggle("off", m !== "arith");
+      readSim.hidden = m !== "sim"; readAr.hidden = m !== "arith"; arCtl.hidden = m !== "arith";
+      pts.forEach(function (g) { g.setAttribute("tabindex", m === "sim" ? "0" : "-1"); });
+      if (m === "sim") { arStepper.stop(); paintSim(-1); }
+      else { arStepper.stop(); arStepper.go(0, 1); }
+    }
+    plate.querySelectorAll("[data-mode]").forEach(function (b) { b.addEventListener("click", function () { setMode(b.dataset.mode); }); });
+    setMode("sim");
+
+    return { playArith: function () { setMode("arith"); arStepper.play(); } };
+  })();
+
+  document.getElementById("jump-arith").addEventListener("click", function () {
+    var plate = document.getElementById("fig-2-2");
+    plate.scrollIntoView({ behavior: FL.reducedMotion() ? "auto" : "smooth", block: "start" });
+    plate.focus({ preventScroll: true });
+    mapApi.playArith();
+  });
+
+  /* =========================================================
+     FIG 2.3 — 正弦位置編碼
+     ========================================================= */
+  (function posEnc() {
+    var svg = document.getElementById("pe-svg");
+    var P = 24, D = 32, CW = 20, CH = 11, OX = 64, OY = 52;
+    function pe(p, j) {
+      var i = Math.floor(j / 2), w = 1 / Math.pow(10000, (2 * i) / D);
+      return j % 2 === 0 ? Math.sin(p * w) : Math.cos(p * w);
+    }
+    var PE = [];
+    for (var p = 0; p < P; p++) { var r = []; for (var j = 0; j < D; j++) r.push(pe(p, j)); PE.push(r); }
+    function cos(a, b) {
+      var d = 0, na = 0, nb = 0;
+      for (var j = 0; j < D; j++) { d += a[j] * b[j]; na += a[j] * a[j]; nb += b[j] * b[j]; }
+      return d / Math.sqrt(na * nb);
+    }
+
+    S("text", { class: "col-t", x: OX, y: 20, text: "維度 0 · 高頻（變化快）" }, svg);
+    S("text", { class: "col-t", x: OX + D * CW, y: 20, "text-anchor": "end", text: "低頻（變化慢）· 維度 31" }, svg);
+    S("path", { d: "M" + (OX + 170) + " 34 H " + (OX + D * CW - 170), stroke: "var(--text-faint)", fill: "none", "stroke-dasharray": "2 3" }, svg);
+    S("text", { class: "col-t", x: 0, y: 40, text: "位置 ↓" }, svg);
+
+    var labs = [];
+    var state = { p: 5 };
+    for (var p2 = 0; p2 < P; p2++) (function (p) {
+      labs.push(S("text", { class: "pe-lab", x: OX - 8, y: OY + p * CH + CH / 2, "text-anchor": "end", text: p % 4 === 0 || p === P - 1 ? p : "" }, svg));
+      for (var j = 0; j < D; j++) {
+        var v = PE[p][j];
+        var c = S("rect", { class: "pe-cell", x: OX + j * CW, y: OY + p * CH, width: CW - 1, height: CH - 1, fill: v >= 0 ? "var(--data-q)" : "var(--data-k)", "fill-opacity": (Math.abs(v) * 0.85 + 0.04).toFixed(3) }, svg);
+        c.addEventListener("mouseenter", function () { set(p); });
+      }
+    })(p2);
+    var hi = S("rect", { class: "pe-hi", x: OX - 1, y: OY, width: D * CW + 1, height: CH }, svg);
+
+    // 相似度長條
+    var BY = 356, BH = 104, BW = (D * CW) / P;
+    S("text", { class: "col-t", x: OX, y: BY - 12, text: "cos( PE[p], PE[k] )　k = 0 … 23" }, svg);
+    var base = BY + BH;
+    S("line", { x1: OX, x2: OX + D * CW, y1: base, y2: base, stroke: "var(--rule-strong)" }, svg);
+    S("line", { x1: OX, x2: OX + D * CW, y1: BY, y2: BY, stroke: "var(--rule)", "stroke-dasharray": "2 3" }, svg);
+    S("text", { class: "pe-lab", x: OX - 8, y: BY, "text-anchor": "end", text: "1.0" }, svg);
+    S("text", { class: "pe-lab", x: OX - 8, y: base, "text-anchor": "end", text: "0.4" }, svg);
+    var bars = [], blabs = [];
+    for (var k = 0; k < P; k++) {
+      bars.push(S("rect", { class: "pe-bar", x: OX + k * BW + 2, width: BW - 4, y: base, height: 0 }, svg));
+      blabs.push(S("text", { class: "pe-lab", x: OX + k * BW + BW / 2, y: base + 14, "text-anchor": "middle", text: k % 4 === 0 || k === P - 1 ? k : "" }, svg));
+    }
+
+    var input = document.getElementById("pe-pos"), out = document.getElementById("pe-pos-out"), narr = document.getElementById("pe-narr");
+    narr.setAttribute("aria-live", "polite");
+    function f(v) { return v.toFixed(2).replace("-", "−"); }
+    function set(p) {
+      state.p = p;
+      input.value = p; out.textContent = p;
+      hi.setAttribute("y", OY + p * CH);
+      labs.forEach(function (l, i) { l.classList.toggle("on", i === p); l.textContent = (i % 4 === 0 || i === P - 1 || i === p) ? i : ""; });
+      var sims = PE.map(function (row) { return cos(PE[p], row); });
+      bars.forEach(function (b, k) {
+        var s = sims[k], h = Math.max(0, (s - 0.4) / 0.6) * BH;
+        b.setAttribute("y", base - h);
+        b.setAttribute("height", h.toFixed(1));
+        b.style.fill = k === p ? "var(--accent)" : "var(--text-muted)";
+      });
+      var nb = p < P - 1 ? p + 1 : p - 1, far = p + 8 < P ? p + 8 : p - 8;
+      narr.innerHTML = "位置 <b>" + p + "</b> 的編碼前 4 維 = [" + PE[p].slice(0, 4).map(f).join(", ") + ", …]。與相鄰位置 " + nb + " 的相似度 <b>" + sims[nb].toFixed(2) + "</b>，與相距 8 的位置 " + far + " 降到 <b>" + sims[far].toFixed(2) + "</b>——大致上位置越近、編碼越像，模型因此能感受到「距離」。";
+    }
+    input.addEventListener("input", function () { stopScan(); set(+input.value); });
+
+    var scanBtn = document.getElementById("pe-scan"), scanT = null;
+    function stopScan() { clearInterval(scanT); scanT = null; scanBtn.setAttribute("aria-pressed", "false"); scanBtn.querySelector(".lbl").textContent = "掃描"; }
+    scanBtn.addEventListener("click", function () {
+      if (scanT) { stopScan(); return; }
+      if (state.p >= P - 1) set(0);
+      scanBtn.setAttribute("aria-pressed", "true"); scanBtn.querySelector(".lbl").textContent = "暫停";
+      scanT = setInterval(function () { if (state.p >= P - 1) { stopScan(); return; } set(state.p + 1); }, FL.reducedMotion() ? 600 : 320);
+    });
+    set(5);
+  })();
+})();
+</script>
+</body>
+</html>

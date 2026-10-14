@@ -1,0 +1,644 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>生成與取樣 · LLM 理論 · 圖解手記</title>
+<meta name="description" content="用可操作的圖版理解 LLM 如何一次生成一個 token：logits、softmax、溫度、Top-k 與 Top-p。">
+<script>try{var t=localStorage.getItem("fl-theme");if(t)document.documentElement.setAttribute("data-theme",t)}catch(e){}</script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,300..700;1,9..144,400&family=JetBrains+Mono:wght@400;500;600&family=Noto+Sans+TC:wght@400;500;700&family=Noto+Serif+TC:wght@700&display=swap">
+<link rel="stylesheet" href="../assets/css/site.css">
+<style>
+  /* ---- 本章圖版樣式 ---- */
+
+  /* 機率分布橫條（FIG 5.1 / 5.2 / 5.3 共用） */
+  .dist { display: grid; gap: 6px; margin: var(--s-3) 0 0; padding: 0; }
+  .dist-row {
+    display: grid; grid-template-columns: 5.4em minmax(0, 1fr) 4.4em 2.6em; gap: var(--s-3); align-items: center;
+    padding: 3px 6px; border: 1px solid transparent;
+    transition: opacity var(--dur-2) linear, background var(--dur-2) linear, border-color var(--dur-2) linear;
+  }
+  .dist-tok { display: flex; justify-content: space-between; align-items: baseline; gap: 4px; font: 500 .95rem/1.3 var(--f-body); white-space: nowrap; }
+  .dist-tok small { font: 500 .68rem var(--f-mono); color: var(--text-faint); }
+  .dist-track { position: relative; height: 14px; background: var(--surface-sunken); }
+  .dist-bar { position: absolute; inset: 0 auto 0 0; width: 0; background: var(--data-k); transition: width var(--dur-3) var(--ease-out); }
+  .dist-p { font: 500 .8rem/1 var(--f-mono); text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .dist-n { font: 600 .74rem/1 var(--f-mono); color: var(--data-q); text-align: right; font-variant-numeric: tabular-nums; }
+  .dist-row.cut { opacity: .5; }
+  .dist-row.cut .dist-bar { background: repeating-linear-gradient(45deg, var(--text-faint) 0 2px, transparent 2px 6px); }
+  .dist-row.cut .dist-p .pv { display: none; }
+  .dist-row.cut .dist-p::after { content: "截掉"; color: var(--text-faint); }
+  .dist-row.picked { border-color: var(--accent); background: var(--accent-soft); opacity: 1; }
+  .dist-row.picked .dist-tok span { color: var(--accent); font-weight: 700; }
+  @media (max-width: 520px) {
+    .dist-row { grid-template-columns: 4.4em minmax(0, 1fr) 3.9em 1.6em; gap: var(--s-2); padding: 3px 2px; }
+    .dist-tok { font-size: .9rem; }
+  }
+  .dist.compact .dist-row { grid-template-columns: 3.4em minmax(0, 1fr) 3.8em; padding: 2px 0; }
+  .dist.compact .dist-track { height: 10px; }
+
+  /* FIG 5.1 前文 */
+  .ctx { margin: 0; display: flex; align-items: baseline; gap: var(--s-3); flex-wrap: wrap; }
+  .ctx-text { font: 700 1.5rem/1.3 var(--f-display); }
+  .ctx-cursor { display: inline-block; width: .55em; height: 1.2em; background: var(--accent); vertical-align: -0.18em; margin-left: 2px; animation: blink 1s steps(1) infinite; }
+  @keyframes blink { 50% { opacity: 0; } }
+  .ro-pick { margin: var(--s-3) 0 0; padding-top: var(--s-3); border-top: 1px solid var(--rule); font-size: .9rem; min-height: 3em; }
+  .ro-pick b { font: 700 1.3rem/1.2 var(--f-display); color: var(--accent); }
+
+  /* FIG 5.2 自迴歸迴圈 */
+  .lp-box rect { fill: var(--surface-page); stroke: var(--rule-strong); stroke-width: 1; transition: fill var(--dur-2) linear, stroke var(--dur-2) linear; }
+  .lp-box .lp-t { font: 700 15px var(--f-body); fill: var(--text); text-anchor: middle; }
+  .lp-box .lp-s { font: 500 10.5px var(--f-mono); fill: var(--text-muted); text-anchor: middle; }
+  .lp-box.on rect { fill: var(--accent-soft); stroke: var(--accent); stroke-width: 2; }
+  .lp-box.on .lp-t { fill: var(--accent); }
+  .lp-arrow { fill: none; stroke: var(--text-muted); stroke-width: 1.2; }
+  .lp-ret-bg { fill: none; stroke: var(--rule); stroke-width: 1.4; stroke-dasharray: 4 4; }
+  .lp-ret { fill: none; stroke: var(--accent); stroke-width: 2; }
+  .lp-ret-lbl { font: 500 11px var(--f-mono); fill: var(--text-muted); text-anchor: middle; letter-spacing: .04em; }
+  .gen-grid { display: grid; grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr); gap: var(--s-6); margin-top: var(--s-5); padding-top: var(--s-4); border-top: 1px solid var(--rule); }
+  @media (max-width: 760px) { .gen-grid { grid-template-columns: 1fr; gap: var(--s-5); } }
+  .seq { display: flex; flex-wrap: wrap; gap: 6px; margin-top: var(--s-3); align-items: center; min-height: 34px; }
+  .tok.is-prompt { border-style: dashed; color: var(--text-muted); }
+  .tok.is-new { border-color: var(--accent); color: var(--accent); animation: tokIn var(--dur-3) var(--ease-out); }
+  .tok.is-end { border-color: var(--text-faint); color: var(--text-faint); }
+  @keyframes tokIn { from { clip-path: inset(0 100% 0 0); } to { clip-path: inset(0 0 0 0); } }
+  .seq .caret { width: 9px; height: 22px; background: var(--accent); animation: blink 1s steps(1) infinite; }
+  .gen-out { margin: var(--s-4) 0 0; font: 700 1.15rem/1.5 var(--f-display); min-height: 1.5em; }
+  .gen-empty { font-size: .86rem; color: var(--text-faint); margin: var(--s-3) 0 0; }
+
+  /* FIG 5.3 溫度並排 */
+  .tgrid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 220px), 1fr)); gap: var(--s-5); }
+  .tpanel { border-left: 1px solid var(--rule-strong); padding-left: var(--s-4); min-width: 0; }
+  .tpanel h4 { margin: 0; font: 600 1.2rem/1.2 var(--f-mono); }
+  .tpanel h4 var { font: italic 400 1.1em var(--f-display); }
+  .tpanel .meta-label { display: block; margin-top: 4px; }
+
+  /* 策略比較表 */
+  .table-wrap { overflow-x: auto; margin: var(--s-5) 0; }
+  .cmp { width: 100%; min-width: 560px; border-collapse: collapse; font-size: .92rem; }
+  .cmp th { text-align: left; font: 500 .72rem/1.3 var(--f-mono); letter-spacing: .08em; text-transform: uppercase; color: var(--text-muted); padding: var(--s-2) var(--s-3) var(--s-2) 0; border-bottom: 1px solid var(--rule-strong); }
+  .cmp td { padding: var(--s-3) var(--s-3) var(--s-3) 0; border-bottom: 1px solid var(--rule); vertical-align: top; }
+  .cmp td:first-child { font-weight: 700; white-space: nowrap; }
+</style>
+</head>
+<body data-track="llm" data-chapter="05">
+<a class="skip-link" href="#main">跳到主要內容</a>
+<header class="masthead"><div class="masthead-inner">
+  <a class="brand" href="../index.html">
+    <svg class="brand-mark" viewBox="0 0 26 26" aria-hidden="true"><rect class="bm-frame" x="1" y="1" width="24" height="24"/><path class="bm-line" d="M1 19 L9 12 L15 16 L25 6"/><circle class="bm-dot" cx="15" cy="16" r="2.6"/></svg>
+    <span class="brand-name">圖解手記<small>Visual Field Notes</small></span>
+  </a>
+  <nav class="site-nav" aria-label="主要">
+    <a href="../index.html#categories" class="nav-optional">分類</a>
+    <a href="index.html" class="is-current">LLM 理論</a>
+    <a href="../preview.html" class="nav-optional">元件</a>
+  </nav>
+  <button class="theme-toggle" type="button" aria-label="切換主題"><svg viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="6"/><path d="M8 2a6 6 0 0 0 0 12z" fill="currentColor"/></svg></button>
+</div></header>
+
+<main id="main" class="page">
+  <ol class="crumbs">
+    <li><a href="../index.html">圖解手記</a></li>
+    <li><a href="index.html">01 LLM 理論</a></li>
+    <li aria-current="page">第 05 章</li>
+  </ol>
+
+  <header class="chapter-head">
+    <p class="chapter-num" aria-hidden="true">0<span class="num-accent">5</span></p>
+    <div>
+      <p class="meta-label">LLM 理論 · 第 05 章</p>
+      <h1 class="chapter-title">生成與取樣<span class="en">Decoding &amp; Sampling</span></h1>
+      <p class="chapter-deck">模型每一步只輸出一張「下一個 token 的機率表」，真正決定寫出哪個字的是解碼策略。這一章用三張圖版拆開這最後一哩路：機率從哪來、怎麼一次一個字接下去，以及溫度、Top-k、Top-p 如何改變輸出的性格。</p>
+      <ul class="chapter-meta">
+        <li>閱讀 <b>11 分鐘</b></li>
+        <li>互動圖版 <b>3</b></li>
+        <li>先備 <b>第 04 章 Transformer 區塊</b></li>
+      </ul>
+    </div>
+  </header>
+
+  <div class="chapter-body">
+    <aside class="rail" aria-label="本章導覽">
+      <div class="rail-inner">
+        <div>
+          <p class="meta-label">本章目錄</p>
+          <ol class="toc"></ol>
+        </div>
+        <div class="rail-figs-wrap">
+          <p class="meta-label">圖版</p>
+          <ul class="rail-figs"></ul>
+        </div>
+      </div>
+    </aside>
+
+    <article class="prose">
+      <h2 id="logits"><span class="sec">§ 5.1</span>從 logits 到機率分布</h2>
+      <p class="lede">經過一層層 Transformer 區塊後，模型在<strong>最後一個位置</strong>輸出一個很長的向量——長度等於詞彙表大小，常見是 3 萬到 20 萬。這些數字叫 <span class="term" title="logits">logits</span>，是還沒正規化的分數。</p>
+      <p>logits 可以是任何實數，彼此加起來也不等於 1。要把它們變成「每個 token 被選中的機率」，用的是第 03 章就見過的 softmax，只是這裡多了一個旋鈕：<strong>溫度 T</strong>。</p>
+      <div class="formula" role="math" aria-label="p i equals exp of z i over T, divided by the sum over j of exp of z j over T">
+        <var>p</var>ᵢ = exp(<var>z</var>ᵢ / <var>T</var>) / Σⱼ exp(<var>z</var>ⱼ / <var>T</var>)<br>
+        <span class="cmt">// T = 1 就是標準 softmax；T 越小分布越尖，T 越大分布越平</span>
+      </div>
+
+      <figure class="plate" id="fig-5-1" tabindex="-1">
+        <div class="plate-head">
+          <span class="plate-fig">FIG 5.1</span>
+          <h3 class="plate-title">調整三個旋鈕，看下一個 token 的機率如何重新分配</h3>
+          <span class="plate-hint">拖曳滑桿 / 抽樣</span>
+        </div>
+        <div class="plate-stage">
+          <div class="stage-split">
+            <div>
+              <p class="ctx"><span class="meta-label">前文</span><span class="ctx-text">今天天氣很<span class="ctx-cursor" aria-hidden="true"></span></span></p>
+              <div class="dist" id="cons-dist" role="list" aria-label="候選 token 機率"></div>
+            </div>
+            <div class="readout">
+              <p class="meta-label">讀數</p>
+              <dl>
+                <dt>保留候選</dt><dd id="ro-keep">10</dd>
+                <dt>最高機率</dt><dd><span id="ro-max">0.0</span>%</dd>
+                <dt>熵 bits</dt><dd id="ro-ent">0.00</dd>
+                <dt>已抽樣</dt><dd id="ro-n">0</dd>
+              </dl>
+              <p class="ro-pick" id="ro-pick" aria-live="polite">按「抽樣」從目前的分布抽一個 token。</p>
+            </div>
+          </div>
+        </div>
+        <div class="plate-controls">
+          <div class="field"><label for="cons-t">溫度 T</label><input type="range" id="cons-t" min="0.1" max="2" step="0.05" value="1"><output for="cons-t" id="cons-t-o">1.00</output></div>
+          <div class="field"><label for="cons-k">Top-k</label><input type="range" id="cons-k" min="1" max="10" step="1" value="10"><output for="cons-k" id="cons-k-o">10</output></div>
+          <div class="field"><label for="cons-p">Top-p</label><input type="range" id="cons-p" min="0.1" max="1" step="0.05" value="1"><output for="cons-p" id="cons-p-o">1.00</output></div>
+          <span class="spacer"></span>
+          <button class="btn btn-primary btn-sm" type="button" id="cons-sample"><svg viewBox="0 0 14 14"><rect x="2" y="2" width="10" height="10"/><circle cx="5" cy="5" r=".9" fill="currentColor"/><circle cx="9" cy="9" r=".9" fill="currentColor"/></svg>抽樣</button>
+          <button class="btn btn-ghost btn-sm" type="button" id="cons-burst">連抽 20 次</button>
+          <button class="btn btn-ghost btn-sm" type="button" id="cons-reset">重設</button>
+        </div>
+        <p class="plate-narr" id="cons-narr"></p>
+        <p class="plate-cap">token 旁的小數字是 logit。斜線條＝被 Top-k / Top-p 截掉的候選（顯示的是截掉前的機率）；保留下來的候選會重新正規化成總和 100%。右欄的藍色數字是連抽時各 token 被抽中的次數。logits 為示意值。</p>
+      </figure>
+
+      <div class="note">
+        <span class="meta-label">註</span>
+        <p>機率分布本身是<strong>確定的</strong>：同樣的前文、同樣的模型，算出來的 logits 永遠一樣。同一個問題每次回答不同，是最後「抽樣」這一步造成的，不是模型改變了想法。</p>
+      </div>
+
+      <h2 id="autoregressive"><span class="sec">§ 5.2</span>一次一個 token：自迴歸生成</h2>
+      <p>LLM 並不會一口氣寫出整段話。它預測下一個 token 的分布、從中挑一個、把它<strong>接回輸入的尾端</strong>，再用變長的序列預測下一個……直到產生結束符號或達到長度上限。這種「自己的輸出變成自己的輸入」的方式叫<span class="term" title="Autoregressive">自迴歸</span>。</p>
+
+      <figure class="plate" id="fig-5-2" tabindex="-1">
+        <div class="plate-head">
+          <span class="plate-fig">FIG 5.2</span>
+          <h3 class="plate-title">按「生成」，看句子一個 token 一個 token 長出來</h3>
+          <span class="plate-hint">切換 Greedy / 取樣</span>
+        </div>
+        <div class="plate-stage">
+          <div class="stage-scroll"><svg class="stage-svg" id="loop-svg" viewBox="0 0 720 168" role="img" aria-label="自迴歸生成迴圈：輸入序列、模型、機率分布、取樣，再接回輸入"></svg></div>
+          <p class="scroll-hint">← 可橫向捲動 →</p>
+          <div class="gen-grid">
+            <div>
+              <p class="meta-label">輸入序列（每步多一個 token）</p>
+              <div class="seq" id="gen-seq"></div>
+              <p class="gen-out" id="gen-out" aria-live="polite"></p>
+            </div>
+            <div>
+              <p class="meta-label" id="gen-dist-title">下一個 token 的候選</p>
+              <div class="dist" id="gen-dist" role="list" aria-label="下一個 token 候選機率"></div>
+              <p class="gen-empty" id="gen-empty">尚未開始。按「生成下一個」執行第一步。</p>
+            </div>
+          </div>
+        </div>
+        <div class="plate-controls">
+          <button class="btn btn-primary btn-sm" type="button" id="gen-step"><svg viewBox="0 0 14 14"><path d="m5 2 5 5-5 5"/></svg>生成下一個</button>
+          <button class="btn btn-ghost btn-sm" type="button" id="gen-auto" aria-pressed="false"><svg viewBox="0 0 14 14"><path d="M4 2.5v9l7-4.5z" fill="currentColor"/></svg><span class="lbl">自動生成</span></button>
+          <div class="seg" role="group" aria-label="解碼方式">
+            <button type="button" aria-pressed="false" data-mode="greedy">Greedy</button>
+            <button type="button" aria-pressed="true" data-mode="sample">取樣</button>
+          </div>
+          <div class="field"><label for="gen-t">溫度</label><input type="range" id="gen-t" min="0.2" max="2" step="0.1" value="1"><output for="gen-t" id="gen-t-o">1.0</output></div>
+          <span class="spacer"></span>
+          <button class="btn btn-ghost btn-sm" type="button" id="gen-reset">重設</button>
+        </div>
+        <p class="plate-narr" id="gen-narr"></p>
+        <p class="plate-cap">為了看得清楚，這個示意模型只根據<strong>最後一個 token</strong> 查表給出機率（類似 bigram）；真正的 LLM 每一步都會用注意力讀過整段前文。句號「。」在這裡扮演結束符號。</p>
+      </figure>
+
+      <p>每一步都要重新處理整段前文聽起來很浪費。實作上會用 <strong>KV cache</strong> 把先前 token 在每一層算過的 K、V（第 03 章）存起來，新 token 只需要算自己那一份——這也是長對話會吃掉大量 GPU 記憶體的原因。</p>
+      <p>自迴歸還有一個重要後果：<strong>錯誤會累積</strong>。一旦早期挑了一個不太恰當的 token，後面所有預測都建立在它之上，而模型沒有「回頭修改」的機制，只能順著寫下去。</p>
+
+      <h2 id="strategies"><span class="sec">§ 5.3</span>解碼策略：從分布中挑哪一個？</h2>
+      <h3>Greedy：永遠挑最高的</h3>
+      <p>最直覺的做法是每步都挑機率最高的 token。結果完全可重現，但常常平淡，而且容易陷入重複迴圈。在 FIG 5.2 切到 Greedy，不管按幾次重設，都會得到同一句話。</p>
+
+      <h3>溫度：讓分布變尖或變平</h3>
+      <p>把 logits 先除以 T 再做 softmax。T &lt; 1 會放大分數之間的差距，高分者更集中；T &gt; 1 會縮小差距，冷門候選也分到機率。T 趨近 0 時就等於 Greedy。</p>
+
+      <figure class="plate" id="fig-5-3" tabindex="-1">
+        <div class="plate-head">
+          <span class="plate-fig">FIG 5.3</span>
+          <h3 class="plate-title">同一組 logits，三種溫度</h3>
+          <span class="plate-hint">捲動到此處播放</span>
+        </div>
+        <div class="plate-stage" style="min-height:0">
+          <div class="tgrid" id="tgrid"></div>
+        </div>
+        <p class="plate-cap">取「今天天氣很」的前 6 名候選示意。熵（bits）越高代表分布越平、輸出越難預測；T = 0.3 時「好」幾乎包辦一切，T = 2 時六個候選相去不遠。</p>
+      </figure>
+
+      <h3>Top-k 與 Top-p：先砍掉長尾</h3>
+      <p>就算整體溫度適中，詞彙表裡仍有數萬個機率極小但不為零的 token，累積起來被抽中的機會並不小。<strong>Top-k</strong> 只保留機率最高的 k 個候選；<strong>Top-p</strong>（又稱 nucleus sampling）則保留「累積機率剛好達到 p」的最小集合。</p>
+      <p>兩者的差別在於：Top-k 的候選數是固定的，Top-p 會<strong>隨模型的信心自動伸縮</strong>——模型很有把握時，可能只剩一兩個候選；模型猶豫時，候選會變多。回到 FIG 5.1，把 Top-p 拉到 0.8，再分別把溫度調低與調高，觀察「保留候選」的數字如何改變。</p>
+
+      <div class="table-wrap">
+        <table class="cmp">
+          <thead><tr><th scope="col">策略</th><th scope="col">做法</th><th scope="col">適合</th><th scope="col">風險</th></tr></thead>
+          <tbody>
+            <tr><td>Greedy</td><td>每步挑機率最高者</td><td>短答案、需要可重現的任務</td><td>單調、容易重複</td></tr>
+            <tr><td>溫度 T</td><td>logits ÷ T 再 softmax</td><td>調整整體的冒險程度</td><td>太高會語無倫次</td></tr>
+            <tr><td>Top-k</td><td>只留前 k 名再重新正規化</td><td>砍掉離譜的長尾</td><td>k 固定，不隨信心調整</td></tr>
+            <tr><td>Top-p</td><td>留累積機率達 p 的最小集合</td><td>通用預設（p ≈ 0.9）</td><td>p 太大仍會抽到長尾</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p>實務上這些方法會串起來用，常見順序是：溫度 → Top-k → Top-p → 抽樣。FIG 5.1 的控制台就是照這個順序計算的。</p>
+
+      <h2 id="pitfalls"><span class="sec">§ 5.4</span>重複與幻覺的直覺</h2>
+      <h3>為什麼會一直重複？</h3>
+      <p>低溫或 Greedy 時，模型每步都走最「安全」的路。一旦某句話出現過一次，前文中就有了它，注意力會讓模型覺得「再說一次」很合理——形成自我強化的迴圈。常見的對策是 <strong>repetition / frequency penalty</strong>：降低已經出現過的 token 的 logits。</p>
+      <h3>為什麼會一本正經地胡說？</h3>
+      <p>取樣只保證輸出「看起來像是可能出現的文字」，不保證它是真的。當高溫或長尾讓一個錯誤的 token 被抽中，自迴歸會讓模型順著它編下去以保持通順（§ 5.2 的錯誤累積）。不過幻覺的根源主要在於模型被訓練來預測<em>可能的</em>文字而不是<em>正確的</em>事實（第 06 章），解碼策略只是把這個傾向放大或縮小。</p>
+      <div class="note">
+        <span class="meta-label">實務參考</span>
+        <p>寫程式、事實問答：溫度 0–0.3。一般對話：0.7 左右搭配 Top-p 0.9。創意寫作、腦力激盪：0.9–1.1。數值依模型而異，先從預設值開始微調。</p>
+      </div>
+
+      <h2 id="recap"><span class="sec">§ 5.5</span>本章重點</h2>
+      <ol class="takeaways">
+        <li>模型每一步輸出整個詞彙表的 logits，softmax 之後才是機率分布；分布本身是確定的，隨機只發生在抽樣。</li>
+        <li>生成是自迴歸的：挑一個 token、接回輸入、再預測下一個；KV cache 讓這件事不必每步從頭算，但錯誤也會一路累積。</li>
+        <li>Greedy 穩定但單調；溫度控制分布的尖銳或平坦，T → 0 等於 Greedy。</li>
+        <li>Top-k 固定保留前 k 名，Top-p 依模型信心自動調整候選數量。</li>
+        <li>低溫容易重複、高溫容易離題；幻覺的根源在於模型學的是「可能的文字」而不是「事實」。</li>
+      </ol>
+
+      <nav class="pager" data-auto aria-label="章節翻頁"></nav>
+    </article>
+  </div>
+</main>
+
+<footer class="site-foot"><div class="site-foot-inner">
+  <p>圖解手記 · Visual Field Notes</p>
+  <p>圖版數值為教學示意</p>
+</div></footer>
+
+<script src="../assets/js/catalog.js"></script>
+<script src="../assets/js/site.js"></script>
+<script>
+(function () {
+  "use strict";
+  var S = FL.svg, E = FL.el;
+
+  var CANDS = [["好", 4.2], ["熱", 3.6], ["冷", 3.1], ["晴朗", 2.6], ["悶", 2.2], ["不錯", 1.9], ["差", 1.2], ["潮濕", 0.9], ["奇怪", 0.2], ["香蕉", -1.5]];
+
+  function entropy(ps) {
+    return ps.reduce(function (h, p) { return p > 0 ? h - p * Math.log2(p) : h; }, 0);
+  }
+  function drawFrom(ps) {
+    var r = Math.random(), cum = 0, last = 0;
+    for (var i = 0; i < ps.length; i++) {
+      if (ps[i] <= 0) continue;
+      last = i; cum += ps[i];
+      if (r < cum) return i;
+    }
+    return last;
+  }
+  /* 一列機率條；回傳可更新的參照 */
+  function distRow(parent, label, logit, withCount) {
+    var r = E("div", { class: "dist-row", role: "listitem" }, parent);
+    var t = E("span", { class: "dist-tok" }, r);
+    E("span", { text: label }, t);
+    if (logit != null) E("small", { text: logit.toFixed(1) }, t);
+    var tr = E("span", { class: "dist-track" }, r);
+    var bar = E("i", { class: "dist-bar" }, tr);
+    var p = E("span", { class: "dist-p" }, r);
+    var pv = E("span", { class: "pv" }, p);
+    var num = E("span", { text: "0.0" }, pv);
+    pv.appendChild(document.createTextNode("%"));
+    var n = withCount ? E("span", { class: "dist-n" }, r) : null;
+    return { r: r, bar: bar, num: num, n: n, count: 0, label: label };
+  }
+
+  /* =========================================================
+     FIG 5.1 — 取樣控制台
+     ========================================================= */
+  (function samplingConsole() {
+    var plate = document.getElementById("fig-5-1");
+    var logits = CANDS.map(function (c) { return c[1]; });
+    var list = document.getElementById("cons-dist");
+    var rows = CANDS.map(function (c) { return distRow(list, c[0], c[1], true); });
+    var sT = document.getElementById("cons-t"), sK = document.getElementById("cons-k"), sP = document.getElementById("cons-p");
+    var oT = document.getElementById("cons-t-o"), oK = document.getElementById("cons-k-o"), oP = document.getElementById("cons-p-o");
+    var roKeep = document.getElementById("ro-keep"), roMax = document.getElementById("ro-max"), roEnt = document.getElementById("ro-ent"), roN = document.getElementById("ro-n"), roPick = document.getElementById("ro-pick");
+    var narr = document.getElementById("cons-narr");
+    var cur = null, total = 0;
+
+    // 溫度 → Top-k → Top-p → 重新正規化
+    function compute(T, k, p) {
+      var base = FL.softmax(logits, T);
+      var order = base.map(function (v, i) { return i; }).sort(function (a, b) { return base[b] - base[a]; });
+      var topk = order.slice(0, k);
+      var sk = topk.reduce(function (s, i) { return s + base[i]; }, 0);
+      var kept = [], cum = 0;
+      for (var j = 0; j < topk.length; j++) {
+        kept.push(topk[j]);
+        cum += base[topk[j]] / sk;
+        if (cum >= p - 1e-9) break;
+      }
+      var sf = kept.reduce(function (s, i) { return s + base[i]; }, 0);
+      var probs = base.map(function () { return 0; });
+      kept.forEach(function (i) { probs[i] = base[i] / sf; });
+      return { base: base, probs: probs, kept: kept.length, cutByK: k < base.length, cutByP: kept.length < topk.length };
+    }
+
+    function clearPicks() {
+      rows.forEach(function (r) { r.r.classList.remove("picked"); });
+    }
+    function resetCounts() {
+      total = 0; roN.textContent = "0";
+      rows.forEach(function (r) { r.count = 0; r.n.textContent = ""; });
+      clearPicks();
+      roPick.textContent = "按「抽樣」從目前的分布抽一個 token。";
+    }
+
+    function render() {
+      var T = +sT.value, k = +sK.value, p = +sP.value;
+      oT.textContent = T.toFixed(2); oK.textContent = k; oP.textContent = p.toFixed(2);
+      cur = compute(T, k, p);
+      rows.forEach(function (r, i) {
+        var cut = cur.probs[i] === 0;
+        r.r.classList.toggle("cut", cut);
+        r.bar.style.width = ((cut ? cur.base[i] : cur.probs[i]) * 100).toFixed(2) + "%";
+        FL.ticker(r.num, cur.probs[i] * 100, { digits: 1 });
+        r.r.setAttribute("aria-label", r.label + (cut ? "：已截掉" : "：" + (cur.probs[i] * 100).toFixed(1) + "%"));
+      });
+      roKeep.textContent = cur.kept + " / " + logits.length;
+      FL.ticker(roMax, Math.max.apply(null, cur.probs) * 100, { digits: 1 });
+      FL.ticker(roEnt, entropy(cur.probs), { digits: 2 });
+
+      var msg;
+      if (T < 0.5) msg = "溫度很低，機率被<b>擠向最高分的「好」</b>——幾乎等同 Greedy，每次抽都差不多。";
+      else if (T > 1.4) msg = "溫度很高，分布被<b>攤平</b>，連「香蕉」都分到了機率——輸出變得天馬行空。";
+      else msg = "溫度接近 1，維持模型<b>原本的分布</b>：「好」最有可能，但「熱」「冷」也常被抽中。";
+      if (cur.cutByK) msg += " Top-k = " + k + " 只保留前 " + k + " 名。";
+      if (cur.cutByP) msg += " Top-p = " + p.toFixed(2) + " 只留下累積機率達到 " + Math.round(p * 100) + "% 的最小集合，目前剩 <b>" + cur.kept + "</b> 個候選。";
+      narr.innerHTML = msg;
+    }
+
+    function sampleOnce() {
+      var i = drawFrom(cur.probs);
+      rows[i].count++; total++;
+      rows[i].n.textContent = rows[i].count;
+      return i;
+    }
+    function showPick(i, many) {
+      clearPicks();
+      rows[i].r.classList.add("picked");
+      roN.textContent = total;
+      roPick.innerHTML = (many ? "最後一次抽到 " : "抽到 ") + "<b>" + CANDS[i][0] + "</b>（機率 " + (cur.probs[i] * 100).toFixed(1) + "%）<br>今天天氣很" + CANDS[i][0] + "。";
+    }
+
+    [sT, sK, sP].forEach(function (s) { s.addEventListener("input", function () { resetCounts(); render(); }); });
+    document.getElementById("cons-sample").addEventListener("click", function () { showPick(sampleOnce(), false); });
+    document.getElementById("cons-burst").addEventListener("click", function () {
+      var last = 0;
+      for (var j = 0; j < 20; j++) last = sampleOnce();
+      showPick(last, true);
+    });
+    document.getElementById("cons-reset").addEventListener("click", function () {
+      sT.value = 1; sK.value = 10; sP.value = 1;
+      resetCounts(); render();
+    });
+    render();
+  })();
+
+  /* =========================================================
+     FIG 5.2 — 自迴歸生成迴圈
+     ========================================================= */
+  (function autoregressive() {
+    var plate = document.getElementById("fig-5-2");
+    // 示意模型：只看最後一個 token 的查表機率（logits）
+    var END = ["。", 2.6], COMMA = ["，", 1.6];
+    var MODEL = {
+      "從前": [["有", 3.0], ["，", 1.4], ["的", 0.6]],
+      "，": [["有", 2.0], ["每天", 1.6], ["牠", 0.8]],
+      "牠": [["喜歡", 2.4], ["每天", 2.0], ["住在", 1.4]],
+      "有": [["一隻", 3.0], ["一個", 2.4], ["很多", 1.2]],
+      "一隻": [["小貓", 2.8], ["老狗", 2.2], ["狐狸", 1.8]],
+      "一個": [["小孩", 2.6], ["國王", 2.4], ["獵人", 1.4]],
+      "很多": [["星星", 2.4], ["小貓", 1.6], ["獵人", 0.8]],
+      "的": [["故事", 2.4], ["國王", 1.6], ["星星", 0.8]],
+      "小貓": [["住在", 2.6], ["喜歡", 2.2], ["每天", 1.4]],
+      "老狗": [["住在", 2.2], ["喜歡", 2.0], ["每天", 2.0]],
+      "狐狸": [["住在", 2.6], ["喜歡", 1.6], ["每天", 1.2]],
+      "小孩": [["喜歡", 2.6], ["每天", 2.0], ["住在", 1.6]],
+      "國王": [["住在", 2.4], ["喜歡", 2.0], ["每天", 1.0]],
+      "獵人": [["住在", 2.4], ["每天", 2.0], ["喜歡", 1.2]],
+      "星星": [["閃爍", 2.8], ["每天", 1.2], ["住在", 0.6]],
+      "故事": [["。", 2.6], ["，", 1.6]],
+      "住在": [["森林", 2.4], ["山上", 2.0], ["海邊", 1.6]],
+      "喜歡": [["唱歌", 2.4], ["睡覺", 2.2], ["吃魚", 1.8]],
+      "每天": [["睡覺", 2.3], ["散步", 2.1], ["唱歌", 2.0]]
+    };
+    ["森林", "山上", "海邊"].forEach(function (w) { MODEL[w] = [END, ["，", 1.8]]; });
+    ["唱歌", "睡覺", "吃魚", "散步", "閃爍"].forEach(function (w) { MODEL[w] = [["。", 2.8], ["，", 1.4]]; });
+    var PROMPT = "從前", MAXGEN = 14;
+
+    /* --- 迴圈示意圖 --- */
+    var svg = document.getElementById("loop-svg");
+    var defs = S("defs", {}, svg);
+    var mk = S("marker", { id: "lp-head", viewBox: "0 0 10 10", refX: 9, refY: 5, markerWidth: 7, markerHeight: 7, orient: "auto-start-reverse" }, defs);
+    S("path", { d: "M0 0 L10 5 L0 10 z", fill: "var(--text-muted)" }, mk);
+    var BOX = [
+      { x: 10, t: "輸入序列", s: "tokens" },
+      { x: 200, t: "模型", s: "Transformer × N" },
+      { x: 390, t: "機率分布", s: "softmax(z / T)" },
+      { x: 580, t: "取樣", s: "greedy / 隨機" }
+    ];
+    var BW = 130, BH = 58, BY = 16;
+    var boxEls = BOX.map(function (b, i) {
+      var g = S("g", { class: "lp-box" }, svg);
+      S("rect", { x: b.x, y: BY, width: BW, height: BH, rx: 2 }, g);
+      S("text", { class: "lp-t", x: b.x + BW / 2, y: BY + 26, text: b.t }, g);
+      S("text", { class: "lp-s", x: b.x + BW / 2, y: BY + 45, text: b.s }, g);
+      if (i < BOX.length - 1) S("path", { class: "lp-arrow", d: "M" + (b.x + BW + 4) + " " + (BY + BH / 2) + " H " + (BOX[i + 1].x - 4), "marker-end": "url(#lp-head)" }, svg);
+      return g;
+    });
+    var retD = "M645 " + (BY + BH + 4) + " C 645 150, 75 150, 75 " + (BY + BH + 6);
+    S("path", { class: "lp-ret-bg", d: retD, "marker-end": "url(#lp-head)" }, svg);
+    var ret = S("path", { class: "lp-ret", d: retD }, svg);
+    S("text", { class: "lp-ret-lbl", x: 360, y: 158, text: "選中的 token 接回輸入尾端 ↺" }, svg);
+    var retLen = Math.ceil(ret.getTotalLength()) + 1;
+
+    function replayRet() { FL.drawIn(ret); }
+    function hideRet() {
+      FL.drawReset(ret);
+      ret.style.strokeDasharray = retLen;
+      ret.style.strokeDashoffset = retLen;
+    }
+    function stage(k) { boxEls.forEach(function (g, i) { g.classList.toggle("on", i === k); }); }
+
+    /* --- 狀態 --- */
+    var seqEl = document.getElementById("gen-seq"), distEl = document.getElementById("gen-dist"), empty = document.getElementById("gen-empty");
+    var distTitle = document.getElementById("gen-dist-title"), outEl = document.getElementById("gen-out"), narr = document.getElementById("gen-narr");
+    var bStep = document.getElementById("gen-step"), bAuto = document.getElementById("gen-auto"), bReset = document.getElementById("gen-reset");
+    var sT = document.getElementById("gen-t"), oT = document.getElementById("gen-t-o");
+    var mode = "sample", seq, busy = false, done = false, timers = [], autoOn = false;
+
+    function later(ms, fn) {
+      if (FL.reducedMotion()) { fn(); return; }
+      timers.push(setTimeout(fn, ms));
+    }
+    function renderSeq(newIdx) {
+      seqEl.innerHTML = "";
+      seq.forEach(function (w, i) {
+        var cls = "tok" + (i === 0 ? " is-prompt" : "") + (i === newIdx ? " is-new" : "") + (done && i === seq.length - 1 && w === "。" ? " is-end" : "");
+        E("span", { class: cls, text: w }, seqEl);
+      });
+      if (!done) E("span", { class: "caret", "aria-hidden": "true" }, seqEl);
+      outEl.textContent = seq.join("");
+    }
+    function setBusy(b) {
+      busy = b;
+      bStep.disabled = b || done;
+    }
+
+    function step() {
+      if (busy || done) return;
+      setBusy(true);
+      var last = seq[seq.length - 1];
+      var cands = MODEL[last] || [END];
+      var T = +sT.value;
+      var probs = FL.softmax(cands.map(function (c) { return c[1]; }), T);
+      var pick = 0;
+      if (mode === "greedy") probs.forEach(function (p, i) { if (p > probs[pick]) pick = i; });
+      else pick = drawFrom(probs);
+      var n = seq.length;
+
+      hideRet();
+      stage(0);
+      narr.innerHTML = "第 " + n + " 步：把目前的序列「" + seq.join("") + "」送進模型……";
+      later(320, function () { stage(1); });
+      later(640, function () {
+        stage(2);
+        empty.hidden = true;
+        distEl.innerHTML = "";
+        distTitle.textContent = "「" + last + "」之後的候選";
+        var rows = cands.map(function (c) { return distRow(distEl, c[0], c[1], false); });
+        requestAnimationFrame(function () {
+          rows.forEach(function (r, i) {
+            r.bar.style.width = (probs[i] * 100).toFixed(1) + "%";
+            FL.ticker(r.num, probs[i] * 100, { digits: 1 });
+          });
+        });
+        later(380, function () {
+          stage(3);
+          rows[pick].r.classList.add("picked");
+        });
+        later(760, function () {
+          seq.push(cands[pick][0]);
+          var gen = seq.length - 1;
+          if (cands[pick][0] === "。" || gen >= MAXGEN) done = true;
+          renderSeq(seq.length - 1);
+          stage(0);
+          replayRet();
+          var how = mode === "greedy" ? "Greedy 直接挑最高的" : "依機率抽樣";
+          narr.innerHTML = "第 " + n + " 步：示意模型看最後一個 token「" + last + "」，給出 " + cands.length + " 個候選；" + how + "，選中「<b>" + cands[pick][0] + "</b>」（" + (probs[pick] * 100).toFixed(1) + "%），接回輸入尾端。";
+          if (done) {
+            narr.innerHTML += cands[pick][0] === "。"
+              ? " 產生了句號——相當於<b>結束符號</b>，生成停止。" + (mode === "greedy" ? "Greedy 每次重設都會得到同一句。" : "按「重設」再跑一次，結果可能完全不同。")
+              : " 已達長度上限，強制停止。";
+            stage(-1);
+            stopAuto();
+          }
+          setBusy(false);
+        });
+      });
+    }
+
+    function stopAuto() {
+      autoOn = false;
+      bAuto.setAttribute("aria-pressed", "false");
+      bAuto.querySelector(".lbl").textContent = "自動生成";
+    }
+    function autoLoop() {
+      if (!autoOn) return;
+      if (done) { stopAuto(); return; }
+      if (!busy) step();
+      timers.push(setTimeout(autoLoop, FL.reducedMotion() ? 700 : 1500));
+    }
+
+    function reset() {
+      timers.forEach(clearTimeout); timers = [];
+      stopAuto();
+      seq = [PROMPT]; done = false;
+      setBusy(false);
+      renderSeq(-1);
+      distEl.innerHTML = ""; empty.hidden = false;
+      distTitle.textContent = "下一個 token 的候選";
+      stage(-1); hideRet();
+      narr.innerHTML = "提示詞是「從前」。每按一次「生成下一個」，模型就完成一圈：<b>輸入 → 模型 → 分布 → 取樣 → 接回輸入</b>。";
+    }
+
+    bStep.addEventListener("click", function () { stopAuto(); step(); });
+    bAuto.addEventListener("click", function () {
+      if (autoOn) { stopAuto(); return; }
+      if (done) reset();
+      autoOn = true;
+      bAuto.setAttribute("aria-pressed", "true");
+      bAuto.querySelector(".lbl").textContent = "暫停";
+      autoLoop();
+    });
+    bReset.addEventListener("click", reset);
+    sT.addEventListener("input", function () { oT.textContent = (+sT.value).toFixed(1); });
+    plate.querySelectorAll("[data-mode]").forEach(function (b) {
+      b.addEventListener("click", function () {
+        mode = b.dataset.mode;
+        plate.querySelectorAll("[data-mode]").forEach(function (x) { x.setAttribute("aria-pressed", x === b ? "true" : "false"); });
+        sT.disabled = mode === "greedy";
+        reset();
+        if (mode === "greedy") narr.innerHTML = "Greedy 模式：每步都挑機率最高的 token，<b>溫度不再有作用</b>，結果完全可重現。";
+      });
+    });
+    reset();
+  })();
+
+  /* =========================================================
+     FIG 5.3 — 溫度並排比較
+     ========================================================= */
+  (function temperatures() {
+    var grid = document.getElementById("tgrid");
+    var top = CANDS.slice(0, 6), logits = top.map(function (c) { return c[1]; });
+    var panels = [0.3, 1, 2].map(function (T) {
+      var probs = FL.softmax(logits, T);
+      var p = E("div", { class: "tpanel" }, grid);
+      E("h4", { html: "<var>T</var> = " + T.toFixed(1) }, p);
+      E("span", { class: "meta-label", text: "熵 " + entropy(probs).toFixed(2) + " bits · " + (T < 1 ? "尖銳" : T > 1 ? "平坦" : "原始") }, p);
+      var list = E("div", { class: "dist compact", role: "list" }, p);
+      var rows = top.map(function (c) { return distRow(list, c[0], null, false); });
+      return { probs: probs, rows: rows };
+    });
+    FL.inView(grid, function () {
+      panels.forEach(function (pn, k) {
+        pn.rows.forEach(function (r, i) {
+          r.bar.style.transitionDelay = (k * 120 + i * 50) + "ms";
+          r.bar.style.width = (pn.probs[i] * 100).toFixed(1) + "%";
+          FL.ticker(r.num, pn.probs[i] * 100, { digits: 1, duration: 700 });
+        });
+      });
+    });
+  })();
+})();
+</script>
+</body>
+</html>

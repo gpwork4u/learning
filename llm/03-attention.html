@@ -1,0 +1,556 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>自注意力 · LLM 理論 · 圖解手記</title>
+<meta name="description" content="用可操作的圖版理解 Self-Attention：Q、K、V 如何讓每個 token 決定要看誰。">
+<script>try{var t=localStorage.getItem("fl-theme");if(t)document.documentElement.setAttribute("data-theme",t)}catch(e){}</script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,300..700;1,9..144,400&family=JetBrains+Mono:wght@400;500;600&family=Noto+Sans+TC:wght@400;500;700&family=Noto+Serif+TC:wght@700&display=swap">
+<link rel="stylesheet" href="../assets/css/site.css">
+<style>
+  /* ---- 本章圖版樣式 ---- */
+
+  /* FIG 3.1 arcs */
+  .arc-tok rect { fill: var(--surface-page); stroke: var(--rule-strong); stroke-width: 1; transition: fill var(--dur-1) linear; }
+  .arc-tok text { font: 500 16px var(--f-body); fill: var(--text); text-anchor: middle; dominant-baseline: central; pointer-events: none; }
+  .arc-tok { cursor: pointer; outline: none; }
+  .arc-tok:hover rect { fill: var(--surface-sunken); }
+  .arc-tok:focus-visible rect { stroke: var(--focus); stroke-width: 2; }
+  .arc-tok.is-q rect { fill: var(--data-q); stroke: var(--data-q); }
+  .arc-tok.is-q text { fill: var(--surface-page); }
+  .arc-tok .w-bar { fill: var(--data-k); transition: height var(--dur-3) var(--ease-out), y var(--dur-3) var(--ease-out); }
+  .arc { fill: none; stroke: var(--data-k); stroke-linecap: round; transition: stroke-width var(--dur-3) var(--ease-out), opacity var(--dur-3) var(--ease-out); }
+  .arc-lbl { font: 500 11px var(--f-mono); fill: var(--data-k); text-anchor: middle; transition: opacity var(--dur-2) linear; }
+
+  /* FIG 3.2 qkv */
+  .qkv-col { font: 600 11px var(--f-mono); fill: var(--text-muted); letter-spacing: .08em; }
+  .qkv-lab { font: 500 15px var(--f-body); fill: var(--text); dominant-baseline: central; }
+  .cell rect { stroke: var(--rule); stroke-width: 1; }
+  .cell text { font: 500 10.5px var(--f-mono); fill: var(--text); text-anchor: middle; dominant-baseline: central; }
+  .grp { transition: opacity var(--dur-3) var(--ease-out); }
+  .grp.off { opacity: 0; }
+  .grp.dim { opacity: .22; }
+  .qkv-link { fill: none; stroke: var(--data-q); stroke-width: 1.4; stroke-dasharray: 4 4; }
+  .vlink { fill: none; stroke: var(--data-v); }
+  .score-t { font: 600 13px var(--f-mono); fill: var(--text); dominant-baseline: central; font-variant-numeric: tabular-nums; }
+  .wbar { fill: var(--data-k); transition: width var(--dur-3) var(--ease-out); }
+  .wbar-bg { fill: var(--surface-sunken); }
+  .wpct { font: 600 11px var(--f-mono); fill: var(--text); dominant-baseline: central; }
+  .row-hi { fill: var(--data-q-soft); transition: opacity var(--dur-2) linear; }
+
+  /* FIG 3.3 matrix */
+  .mx-wrap { display: grid; grid-template-columns: minmax(0, 1fr) minmax(200px, 260px); gap: var(--s-5); align-items: start; }
+  @media (max-width: 820px) { .mx-wrap { grid-template-columns: 1fr; } }
+  .mx-cell { transition: fill-opacity var(--dur-3) var(--ease-out); }
+  .mx-cell.masked { fill: url(#hatch) !important; fill-opacity: 1 !important; }
+  .mx-lab { font: 500 13px var(--f-body); fill: var(--text-muted); dominant-baseline: central; }
+  .mx-lab.on { fill: var(--text); font-weight: 700; }
+  .mx-row-hi { fill: none; stroke: var(--rule-strong); stroke-width: 1.5; transition: y var(--dur-2) var(--ease-out); pointer-events: none; }
+  .mx-pct { font: 500 9px var(--f-mono); fill: var(--text); text-anchor: middle; dominant-baseline: central; pointer-events: none; }
+  .row-read { margin: 0; padding: 0; list-style: none; display: grid; gap: 6px; }
+  .row-read li { display: grid; grid-template-columns: 3.4em 1fr 3em; gap: var(--s-2); align-items: center; font-size: .84rem; }
+  .row-read .b { height: 8px; background: var(--surface-sunken); position: relative; }
+  .row-read .b i { position: absolute; inset: 0 auto 0 0; background: var(--data-k); transition: width var(--dur-3) var(--ease-out); }
+  .row-read .p { font: 500 .76rem var(--f-mono); text-align: right; font-variant-numeric: tabular-nums; }
+</style>
+</head>
+<body data-track="llm" data-chapter="03">
+<a class="skip-link" href="#main">跳到主要內容</a>
+<header class="masthead"><div class="masthead-inner">
+  <a class="brand" href="../index.html">
+    <svg class="brand-mark" viewBox="0 0 26 26" aria-hidden="true"><rect class="bm-frame" x="1" y="1" width="24" height="24"/><path class="bm-line" d="M1 19 L9 12 L15 16 L25 6"/><circle class="bm-dot" cx="15" cy="16" r="2.6"/></svg>
+    <span class="brand-name">圖解手記<small>Visual Field Notes</small></span>
+  </a>
+  <nav class="site-nav" aria-label="主要">
+    <a href="../index.html#categories" class="nav-optional">分類</a>
+    <a href="index.html" class="is-current">LLM 理論</a>
+    <a href="../preview.html" class="nav-optional">元件</a>
+  </nav>
+  <button class="theme-toggle" type="button" aria-label="切換主題"><svg viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="6"/><path d="M8 2a6 6 0 0 0 0 12z" fill="currentColor"/></svg></button>
+</div></header>
+
+<main id="main" class="page">
+  <ol class="crumbs">
+    <li><a href="../index.html">圖解手記</a></li>
+    <li><a href="index.html">01 LLM 理論</a></li>
+    <li aria-current="page">第 03 章</li>
+  </ol>
+
+  <header class="chapter-head">
+    <p class="chapter-num" aria-hidden="true">0<span class="num-accent">3</span></p>
+    <div>
+      <p class="meta-label">LLM 理論 · 第 03 章</p>
+      <h1 class="chapter-title">自注意力<span class="en">Self-Attention</span></h1>
+      <p class="chapter-deck">一句話裡的每個 token，都要決定「該參考誰、參考多少」。這一章用三張圖版拆開注意力機制：先看效果，再看 Q、K、V 怎麼算，最後看整張注意力矩陣與遮罩。</p>
+      <ul class="chapter-meta">
+        <li>閱讀 <b>12 分鐘</b></li>
+        <li>互動圖版 <b>3</b></li>
+        <li>先備 <b>第 02 章 嵌入向量</b></li>
+      </ul>
+    </div>
+  </header>
+
+  <div class="chapter-body">
+    <aside class="rail" aria-label="本章導覽">
+      <div class="rail-inner">
+        <div>
+          <p class="meta-label">本章目錄</p>
+          <ol class="toc"></ol>
+        </div>
+        <div class="rail-figs-wrap">
+          <p class="meta-label">圖版</p>
+          <ul class="rail-figs"></ul>
+        </div>
+      </div>
+    </aside>
+
+    <article class="prose">
+      <h2 id="why"><span class="sec">§ 3.1</span>「它」指的是誰？</h2>
+      <p class="lede">讀到「貓沒有跳上桌子，因為<strong>它</strong>太累了」，你會自然地把「它」連到「貓」；但只要把最後一個字換成「高」，「它」就變成了「桌子」。</p>
+      <p>同一個字的意思，取決於它跟句子裡其他字的關係。上一章的嵌入向量只描述了 token <em>自己</em>，還沒有任何上下文。<span class="term" title="Self-Attention">自注意力</span>就是讓每個 token 去「看」其他 token、把相關的資訊混進自己的表示裡的機制。</p>
+
+      <figure class="plate" id="fig-3-1" tabindex="-1">
+        <div class="plate-head">
+          <span class="plate-fig">FIG 3.1</span>
+          <h3 class="plate-title">點選任一個 token，看它把注意力分給誰</h3>
+          <span class="plate-hint">點擊 / Enter</span>
+        </div>
+        <div class="plate-stage">
+          <div class="stage-scroll"><svg class="stage-svg" id="arcs" viewBox="0 0 800 270" role="img" aria-label="注意力弧線圖"></svg></div>
+          <p class="scroll-hint">← 可橫向捲動 →</p>
+        </div>
+        <div class="plate-controls">
+          <div class="seg" role="group" aria-label="切換句子">
+            <button type="button" aria-pressed="true" data-sent="0">…因為它太<b>累</b>了</button>
+            <button type="button" aria-pressed="false" data-sent="1">…因為它太<b>高</b>了</button>
+          </div>
+          <span class="spacer"></span>
+          <ul class="legend"><li style="--c:var(--data-q)"><i></i>查詢中的 token</li><li style="--c:var(--data-k)"><i></i>注意力權重</li></ul>
+        </div>
+        <p class="plate-narr" id="arcs-narr"></p>
+        <p class="plate-cap">弧線越粗代表權重越高；每個 token 的權重加總為 100%。這裡的數值是為了說明而設計的示意值，真實模型的權重分散在數十個注意力頭裡。</p>
+      </figure>
+
+      <h2 id="qkv-intro"><span class="sec">§ 3.2</span>Q、K、V：查詢、鍵、值</h2>
+      <p>注意力的計算可以想成在圖書館找資料：</p>
+      <ul>
+        <li><strong>Query（查詢，q）</strong>——「我現在想找什麼？」由正在更新的那個 token 發出。</li>
+        <li><strong>Key（鍵，k）</strong>——「我這裡有什麼？」每個 token 掛出的索引標籤。</li>
+        <li><strong>Value（值，v）</strong>——「如果你選了我，我交給你的內容。」</li>
+      </ul>
+      <p>q 和每個 k 做點積得到相似度分數，經過 softmax 變成權重，再用這組權重把所有 v 加權平均——這就是該 token 的新表示。三個向量都是同一個嵌入 x 乘上三個不同的學習矩陣得到的。</p>
+
+      <figure class="plate" id="fig-3-2" tabindex="-1">
+        <div class="plate-head">
+          <span class="plate-fig">FIG 3.2</span>
+          <h3 class="plate-title">一步一步算出「咖啡」的注意力輸出</h3>
+          <span class="plate-hint">← → 鍵切換步驟</span>
+        </div>
+        <div class="plate-stage">
+          <div class="stage-scroll"><svg class="stage-svg" id="qkv-svg" viewBox="0 0 840 350" role="img" aria-label="Q K V 計算過程"></svg></div>
+          <p class="scroll-hint">← 可橫向捲動 →</p>
+        </div>
+        <div class="plate-controls">
+          <button class="btn btn-ghost btn-sm" type="button" data-step="prev" aria-label="上一步"><svg viewBox="0 0 14 14"><path d="M9 2 4 7l5 5"/></svg></button>
+          <button class="btn btn-primary btn-sm" type="button" data-step="play" aria-pressed="false"><svg viewBox="0 0 14 14"><path d="M4 2.5v9l7-4.5z" fill="currentColor"/></svg><span class="lbl">播放</span></button>
+          <button class="btn btn-ghost btn-sm" type="button" data-step="next" aria-label="下一步"><svg viewBox="0 0 14 14"><path d="m5 2 5 5-5 5"/></svg></button>
+          <ol class="steps"></ol>
+          <span class="step-count"></span>
+          <span class="spacer"></span>
+          <button class="btn btn-ghost btn-sm" type="button" data-step="reset">重設</button>
+        </div>
+        <p class="plate-narr"></p>
+        <p class="plate-cap">向量維度縮小到 3 方便閱讀（真實模型常見 64–128 維／每個頭）。格子顏色深淺代表數值大小。</p>
+      </figure>
+
+      <p>把整個過程寫成一行，就是 Transformer 論文裡的那條公式：</p>
+      <div class="formula" role="math" aria-label="Attention of Q K V equals softmax of Q K transpose over square root of d k, times V">
+        Attention(<var>Q</var>, <var>K</var>, <var>V</var>) = softmax( <var>Q</var><var>K</var>ᵀ / √<var>d</var>ₖ ) · <var>V</var><br>
+        <span class="cmt">// 除以 √dₖ：維度越高點積越大，softmax 會變得太尖銳，梯度消失</span>
+      </div>
+
+      <h2 id="matrix"><span class="sec">§ 3.3</span>注意力矩陣與因果遮罩</h2>
+      <p>把每個 token 當作查詢都算一次，就得到一張 n×n 的<strong>注意力矩陣</strong>：第 i 列是第 i 個 token 分配給所有 token 的權重。所有列可以用矩陣乘法一次平行算完，這是 Transformer 比 RNN 快的關鍵。</p>
+      <p>像 GPT 這類<strong>生成式模型</strong>在訓練時要預測下一個字，不能偷看答案，所以會加上<span class="term" title="Causal Mask">因果遮罩</span>：第 i 個 token 只能看到自己和前面的 token，右上三角被設成 −∞，softmax 後變成 0。</p>
+
+      <figure class="plate" id="fig-3-3" tabindex="-1">
+        <div class="plate-head">
+          <span class="plate-fig">FIG 3.3</span>
+          <h3 class="plate-title">切換注意力頭與遮罩，觀察矩陣如何改變</h3>
+          <span class="plate-hint">滑過列查看</span>
+        </div>
+        <div class="plate-stage">
+          <div class="mx-wrap">
+            <div class="stage-scroll"><svg class="stage-svg" id="mx" viewBox="0 0 470 450" role="img" aria-label="注意力矩陣熱圖"></svg></div>
+            <div class="readout">
+              <p class="meta-label" id="mx-row-title">第 7 列：「它」</p>
+              <ul class="row-read" id="mx-row"></ul>
+            </div>
+          </div>
+        </div>
+        <div class="plate-controls">
+          <div class="seg" role="group" aria-label="注意力頭">
+            <button type="button" aria-pressed="true" data-head="0">頭 A · 指代</button>
+            <button type="button" aria-pressed="false" data-head="1">頭 B · 前一字</button>
+            <button type="button" aria-pressed="false" data-head="2">頭 C · 句首</button>
+          </div>
+          <div class="seg" role="group" aria-label="遮罩">
+            <button type="button" aria-pressed="false" data-mask="0">雙向</button>
+            <button type="button" aria-pressed="true" data-mask="1">因果遮罩</button>
+          </div>
+        </div>
+        <p class="plate-narr" id="mx-narr"></p>
+        <p class="plate-cap">列＝查詢 token，欄＝被注意的 token；斜線區塊是被遮罩擋住的「未來」。三個頭的模式是示意，真實模型中常能觀察到類似的「前一字頭」與「句首匯聚」現象。</p>
+      </figure>
+
+      <h2 id="multihead"><span class="sec">§ 3.4</span>多頭注意力</h2>
+      <p>單一組 Q、K、V 只能學到一種「關注方式」。<strong>多頭注意力</strong>（Multi-Head Attention）同時跑 h 組獨立的注意力，例如一個頭追蹤指代、一個頭看相鄰字、一個頭抓語法結構，最後把各頭的輸出串接起來再做一次線性投影。</p>
+      <div class="formula">
+        head<var>ᵢ</var> = Attention(<var>X</var><var>W</var>ᵢ<sup>Q</sup>, <var>X</var><var>W</var>ᵢ<sup>K</sup>, <var>X</var><var>W</var>ᵢ<sup>V</sup>)<br>
+        MultiHead(<var>X</var>) = Concat(head₁, …, head<var>ₕ</var>) · <var>W</var><sup>O</sup>
+      </div>
+      <div class="note">
+        <span class="meta-label">註</span>
+        <p>每個頭的維度通常是 d<sub>model</sub> / h，所以多頭並不會讓計算量變成 h 倍——只是把同樣的維度切成好幾份，各看各的。</p>
+      </div>
+
+      <h2 id="recap"><span class="sec">§ 3.5</span>本章重點</h2>
+      <ol class="takeaways">
+        <li>自注意力讓每個 token 依據上下文重新組合自己的表示，解決「同字不同義」。</li>
+        <li>q·k 決定「看誰」，softmax 把分數變成權重，權重乘 v 決定「拿到什麼」。</li>
+        <li>除以 √dₖ 是為了讓 softmax 不要過度尖銳。</li>
+        <li>生成式模型使用因果遮罩，確保每個位置只看得到過去。</li>
+        <li>多頭注意力讓模型同時學到多種關係模式。</li>
+      </ol>
+
+      <nav class="pager" data-auto aria-label="章節翻頁"></nav>
+    </article>
+  </div>
+</main>
+
+<footer class="site-foot"><div class="site-foot-inner">
+  <p>圖解手記 · Visual Field Notes</p>
+  <p>圖版數值為教學示意</p>
+</div></footer>
+
+<script src="../assets/js/catalog.js"></script>
+<script src="../assets/js/site.js"></script>
+<script>
+(function () {
+  "use strict";
+  var S = FL.svg;
+
+  /* =========================================================
+     FIG 3.1 — 注意力弧線
+     ========================================================= */
+  var SENTS = [
+    ["貓", "沒有", "跳上", "桌子", "，", "因為", "它", "太", "累", "了"],
+    ["貓", "沒有", "跳上", "桌子", "，", "因為", "它", "太", "高", "了"]
+  ];
+  // 語意連結強度（示意）：LINKS[s][i] = { j: strength }
+  var LINKS = [
+    { 1: { 0: 1.6 }, 2: { 0: 1.8, 3: 1.4 }, 3: { 2: 1.6 }, 5: { 1: 1.2, 8: 1.0 }, 6: { 0: 3.0, 3: 0.4 }, 7: { 8: 1.4 }, 8: { 6: 1.6, 0: 1.9, 7: 1.0 }, 9: { 8: 1.6 } },
+    { 1: { 0: 1.6 }, 2: { 0: 1.8, 3: 1.4 }, 3: { 2: 1.6 }, 5: { 1: 1.2, 8: 1.0 }, 6: { 3: 3.0, 0: 0.4 }, 7: { 8: 1.4 }, 8: { 6: 1.6, 3: 1.9, 7: 1.0 }, 9: { 8: 1.6 } }
+  ];
+  function rowWeights(s, i, n, causal) {
+    var logits = [];
+    for (var j = 0; j < n; j++) {
+      var v = (j === i ? 0.9 : 0) + (Math.abs(i - j) === 1 ? 0.5 : 0) + ((LINKS[s][i] || {})[j] || 0);
+      if (SENTS[s][j] === "，") v -= 0.6;
+      logits.push(causal && j > i ? -Infinity : v);
+    }
+    var fin = logits.map(function (x) { return isFinite(x) ? x : -1e9; });
+    return FL.softmax(fin, 0.8);
+  }
+
+  (function arcs() {
+    var svg = document.getElementById("arcs"), narr = document.getElementById("arcs-narr");
+    var plate = document.getElementById("fig-3-1");
+    var sent = 0, q = 6, BASE = 200, W = 800;
+    var gArcs = S("g", {}, svg), gLbl = S("g", {}, svg), gTok = S("g", {}, svg);
+    var toks = [];
+    var n = SENTS[0].length, step = (W - 80) / (n - 1);
+    function xOf(i) { return 40 + i * step; }
+
+    for (var i = 0; i < n; i++) (function (i) {
+      var g = S("g", { class: "arc-tok", tabindex: "0", role: "button" }, gTok);
+      var w = 60;
+      S("rect", { x: xOf(i) - w / 2, y: BASE, width: w, height: 34, rx: 2 }, g);
+      var t = S("text", { x: xOf(i), y: BASE + 17 }, g);
+      var bar = S("rect", { class: "w-bar", x: xOf(i) - w / 2, y: BASE + 50, width: w, height: 0 }, g);
+      var pct = S("text", { x: xOf(i), y: BASE + 60, style: "font:500 10px var(--f-mono);fill:var(--text-muted)" }, g);
+      g.addEventListener("click", function () { q = i; draw(); });
+      g.addEventListener("keydown", function (e) { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); q = i; draw(); } });
+      toks.push({ g: g, t: t, bar: bar, pct: pct });
+    })(i);
+
+    var arcEls = [], lblEls = [];
+    for (var j = 0; j < n; j++) {
+      arcEls.push(S("path", { class: "arc" }, gArcs));
+      lblEls.push(S("text", { class: "arc-lbl" }, gLbl));
+    }
+
+    function draw() {
+      var words = SENTS[sent];
+      var w = rowWeights(sent, q, n, false);
+      toks.forEach(function (tk, i) {
+        tk.t.textContent = words[i];
+        tk.g.classList.toggle("is-q", i === q);
+        tk.g.setAttribute("aria-label", "「" + words[i] + "」" + (i === q ? "（查詢中）" : "，權重 " + Math.round(w[i] * 100) + "%"));
+        tk.g.setAttribute("aria-pressed", i === q ? "true" : "false");
+        var h = 0; // 權重小直條在 token 下方
+        tk.bar.setAttribute("height", 3);
+        tk.bar.setAttribute("width", Math.max(2, w[i] * 60));
+        tk.pct.textContent = Math.round(w[i] * 100) + "%";
+      });
+      arcEls.forEach(function (p, j) {
+        var x1 = xOf(q), x2 = xOf(j);
+        if (j === q) {
+          p.setAttribute("d", "M" + (x1 - 10) + " " + BASE + " C " + (x1 - 26) + " " + (BASE - 44) + " " + (x1 + 26) + " " + (BASE - 44) + " " + (x1 + 10) + " " + BASE);
+        } else {
+          var h = Math.min(170, 30 + Math.abs(x2 - x1) * 0.42);
+          p.setAttribute("d", "M" + x1 + " " + BASE + " Q " + (x1 + x2) / 2 + " " + (BASE - h * 2) + " " + x2 + " " + BASE);
+        }
+        p.style.strokeWidth = (1 + w[j] * 14).toFixed(2);
+        p.style.opacity = w[j] < 0.03 ? 0.08 : (0.25 + w[j] * 0.9).toFixed(2);
+        var lb = lblEls[j];
+        var apex = j === q ? BASE - 40 : BASE - Math.min(170, 30 + Math.abs(x2 - x1) * 0.42) - 8;
+        lb.setAttribute("x", j === q ? x1 : (x1 + x2) / 2);
+        lb.setAttribute("y", apex);
+        lb.textContent = Math.round(w[j] * 100) + "%";
+        lb.style.opacity = w[j] >= 0.1 ? 1 : 0;
+      });
+      var order = w.map(function (v, j) { return [v, j]; }).filter(function (p) { return p[1] !== q; }).sort(function (a, b) { return b[0] - a[0]; });
+      var top = order[0];
+      narr.innerHTML = "「<b>" + words[q] + "</b>」把最多的注意力（" + Math.round(top[0] * 100) + "%）分給了「" + words[top[1]] + "」" +
+        (q === 6 ? (sent === 0 ? "——因為會「累」的是貓。" : "——因為會「高」的是桌子。換一個字，關係就整個翻轉。") : "。試著點「它」，再切換句子。");
+    }
+
+    plate.querySelectorAll("[data-sent]").forEach(function (b) {
+      b.addEventListener("click", function () {
+        sent = +b.dataset.sent;
+        plate.querySelectorAll("[data-sent]").forEach(function (x) { x.setAttribute("aria-pressed", x === b ? "true" : "false"); });
+        draw();
+      });
+    });
+    draw();
+  })();
+
+  /* =========================================================
+     FIG 3.2 — Q K V 逐步計算
+     ========================================================= */
+  (function qkv() {
+    var svg = document.getElementById("qkv-svg"), plate = document.getElementById("fig-3-2");
+    var T = ["我", "喜歡", "喝", "咖啡"];
+    var X = [[0.3, 0.8, -0.2, 0.1], [0.7, -0.1, 0.5, 0.4], [0.9, 0.2, 0.8, -0.3], [0.2, 0.6, 0.4, 0.9]];
+    var K = [[0.2, 0.9, -0.3], [0.6, 0.1, 0.4], [1.1, -0.2, 0.9], [0.4, 0.3, 0.5]];
+    var Q = [[0.5, 0.7, 0.1], [0.3, 0.2, 0.9], [0.8, 0.1, 0.6], [1.2, -0.1, 1.0]];
+    var V = [[0.9, 0.1, 0.0], [0.2, 0.8, 0.3], [0.1, 0.3, 0.9], [0.5, 0.5, 0.4]];
+    var QI = 3, DK = 3;
+    var raw = K.map(function (k) { return k.reduce(function (s, v, d) { return s + v * Q[QI][d]; }, 0); });
+    var scaled = raw.map(function (s) { return s / Math.sqrt(DK); });
+    var wts = FL.softmax(scaled);
+    var Z = [0, 1, 2].map(function (d) { return V.reduce(function (s, v, j) { return s + wts[j] * v[d]; }, 0); });
+
+    var CW = 34, CH = 24, ROW0 = 64, RH = 54;
+    var COL = { lab: 16, x: 76, q: 268, k: 390, v: 512, score: 650, w: 712 };
+    function rowY(r) { return ROW0 + r * RH; }
+
+    function cells(parent, x, y, vals, color) {
+      var g = S("g", { class: "cell" }, parent);
+      vals.forEach(function (v, d) {
+        S("rect", { x: x + d * CW, y: y - CH / 2, width: CW, height: CH, fill: color, "fill-opacity": Math.min(0.85, Math.abs(v) * 0.7 + 0.06) }, g);
+        S("text", { x: x + d * CW + CW / 2, y: y, text: v.toFixed(1) }, g);
+      });
+      return g;
+    }
+
+    // 欄標題
+    var gHead = S("g", {}, svg);
+    [["TOKEN", COL.lab], ["嵌入 x", COL.x], ["q", COL.q], ["k", COL.k], ["v", COL.v], ["q·k", COL.score], ["權重", COL.w]].forEach(function (h) {
+      S("text", { class: "qkv-col", x: h[1], y: 26, text: h[0] }, gHead);
+    });
+    S("line", { x1: 0, x2: 840, y1: 38, y2: 38, stroke: "var(--rule)" }, gHead);
+
+    var hi = S("rect", { class: "row-hi", x: 0, y: rowY(QI) - 24, width: 840, height: 48, opacity: 0 }, svg);
+    var gLinks = S("g", { class: "grp off" }, svg);
+    var gVlinks = S("g", { class: "grp off" }, svg);
+
+    var gLab = S("g", {}, svg), gX = S("g", { class: "grp" }, svg);
+    var gQ = S("g", { class: "grp off" }, svg), gK = S("g", { class: "grp off" }, svg), gV = S("g", { class: "grp off" }, svg);
+    var gScore = S("g", { class: "grp off" }, svg), gW = S("g", { class: "grp off" }, svg), gZ = S("g", { class: "grp off" }, svg);
+    var scoreEls = [], barEls = [], pctEls = [], qRows = [];
+
+    T.forEach(function (t, r) {
+      var y = rowY(r);
+      S("text", { class: "qkv-lab", x: COL.lab, y: y, text: t }, gLab);
+      cells(gX, COL.x, y, X[r], "var(--text-muted)");
+      qRows.push(cells(gQ, COL.q, y, Q[r], "var(--data-q)"));
+      cells(gK, COL.k, y, K[r], "var(--data-k)");
+      cells(gV, COL.v, y, V[r], "var(--data-v)");
+      scoreEls.push(S("text", { class: "score-t", x: COL.score, y: y, text: "0.00" }, gScore));
+      S("rect", { class: "wbar-bg", x: COL.w, y: y - 6, width: 100, height: 12 }, gW);
+      barEls.push(S("rect", { class: "wbar", x: COL.w, y: y - 6, width: 0, height: 12 }, gW));
+      pctEls.push(S("text", { class: "wpct", x: COL.w + 106, y: y, text: "" }, gW));
+      // q(咖啡) → k_r 連線
+      S("path", { class: "qkv-link", d: "M" + (COL.q + CW * 3) + " " + rowY(QI) + " C " + (COL.q + CW * 3 + 14) + " " + rowY(QI) + " " + (COL.k - 14) + " " + y + " " + COL.k + " " + y }, gLinks);
+    });
+    // 投影箭頭
+    var gArrow = S("g", { class: "grp off" }, svg);
+    S("text", { class: "qkv-col", x: COL.x + CW * 4 + 8, y: rowY(1.5) + 4, text: "× W", style: "font-size:12px;fill:var(--text)" }, gArrow);
+    S("path", { d: "M" + (COL.x + CW * 4 + 6) + " " + (rowY(1.5) + 14) + " h36 l-5 -4 m5 4 l-5 4", fill: "none", stroke: "var(--text-muted)" }, gArrow);
+
+    // 輸出 z
+    var zy = rowY(4) + 30;
+    S("line", { x1: 0, x2: 840, y1: zy - 34, y2: zy - 34, stroke: "var(--rule-strong)" }, gZ);
+    S("text", { class: "qkv-lab", x: COL.lab, y: zy, text: "z（咖啡）", style: "font-weight:700" }, gZ);
+    cells(gZ, COL.v, zy, Z, "var(--data-v)");
+    S("text", { class: "qkv-col", x: COL.v + CW * 3 + 14, y: zy + 4, text: "= Σ 權重ⱼ · vⱼ", style: "fill:var(--text)" }, gZ);
+    T.forEach(function (t, r) {
+      S("path", { class: "vlink", d: "M" + (COL.v + CW * 1.5) + " " + (rowY(r) + CH / 2) + " L " + (COL.v + CW * 1.5) + " " + (zy - CH / 2), "stroke-width": (wts[r] * 8 + 0.6).toFixed(2), opacity: (0.25 + wts[r]).toFixed(2), transform: "translate(" + ((r - 1.5) * 10) + ",0)" }, gVlinks);
+    });
+
+    function vis(g, state) { g.classList.remove("off", "dim"); if (state) g.classList.add(state); }
+
+    var steps = [
+      { narr: "四個 token 各自帶著一個<b>嵌入向量 x</b>（第 02 章）。此時它們互不相識，「咖啡」還不知道前面出現過「喝」。" },
+      { narr: "每個 x 分別乘上三個學到的矩陣 W<sub>Q</sub>、W<sub>K</sub>、W<sub>V</sub>，分裂成 <b>q、k、v</b> 三個較短的向量。" },
+      { narr: "以「咖啡」的 <b>q</b> 當查詢，和每個 token 的 k 做點積：方向越接近，分數越高。「喝」的 k 和它最像。" },
+      { narr: "把分數除以 <b>√dₖ = √3 ≈ 1.73</b>，讓數值保持在 softmax 好用的範圍。" },
+      { narr: "<b>softmax</b> 把分數轉成總和為 100% 的權重。「喝」拿到最多，其次是「喜歡」。" },
+      { narr: "用權重對每個 <b>v</b> 加權相加，得到「咖啡」新的表示 <b>z</b>——它現在帶著「被喝的東西」這層語意。" }
+    ];
+
+    FL.stepper(plate, {
+      steps: steps,
+      autoplay: 2600,
+      render: function (i) {
+        vis(gArrow, i === 1 ? null : "off");
+        vis(gQ, i >= 1 ? null : "off");
+        vis(gK, i >= 1 ? (i === 5 ? "dim" : null) : "off");
+        vis(gV, i >= 1 ? (i >= 2 && i < 5 ? "dim" : null) : "off");
+        vis(gX, i >= 2 ? "dim" : null);
+        qRows.forEach(function (g, r) { g.style.opacity = i >= 2 && r !== QI ? 0.2 : 1; g.style.transition = "opacity 480ms"; });
+        hi.setAttribute("opacity", i >= 2 ? 1 : 0);
+        vis(gLinks, i >= 2 && i <= 3 ? null : "off");
+        vis(gScore, i >= 2 ? (i === 5 ? "dim" : null) : "off");
+        scoreEls.forEach(function (el, r) { FL.ticker(el, i >= 3 ? scaled[r] : raw[r], { instant: i < 2 }); });
+        vis(gW, i >= 4 ? null : "off");
+        barEls.forEach(function (b, r) { b.setAttribute("width", i >= 4 ? (wts[r] * 100).toFixed(1) : 0); pctEls[r].textContent = i >= 4 ? Math.round(wts[r] * 100) + "%" : ""; });
+        vis(gVlinks, i === 5 ? null : "off");
+        vis(gZ, i === 5 ? null : "off");
+      }
+    });
+  })();
+
+  /* =========================================================
+     FIG 3.3 — 注意力矩陣
+     ========================================================= */
+  (function matrix() {
+    var svg = document.getElementById("mx"), plate = document.getElementById("fig-3-3");
+    var words = SENTS[0], n = words.length;
+    var head = 0, causal = true, row = 6;
+    var C = 36, OX = 104, OY = 74;
+
+    var defs = S("defs", {}, svg);
+    var pat = S("pattern", { id: "hatch", width: 6, height: 6, patternUnits: "userSpaceOnUse", patternTransform: "rotate(45)" }, defs);
+    S("rect", { width: 6, height: 6, fill: "var(--surface-sunken)" }, pat);
+    S("line", { x1: 0, y1: 0, x2: 0, y2: 6, stroke: "var(--rule)", "stroke-width": 2 }, pat);
+
+    function weights(h, i) {
+      var logits = [];
+      for (var j = 0; j < n; j++) {
+        var v;
+        if (h === 0) return rowWeights(0, i, n, causal);
+        if (h === 1) v = (j === i - 1 ? 4 : 0) + (j === i ? 1 : 0) + (i === 0 && j === 0 ? 4 : 0);
+        if (h === 2) v = (j === 0 ? 3 : 0) + (words[j] === "，" ? 1.6 : 0) + (j === i ? 0.6 : 0);
+        logits.push(causal && j > i ? -1e9 : v);
+      }
+      return FL.softmax(logits);
+    }
+
+    var colLab = [], rowLab = [], cellEls = [], pctEls = [];
+    for (var j = 0; j < n; j++) {
+      var t = S("text", { class: "mx-lab", x: 0, y: 0, transform: "translate(" + (OX + j * C + C / 2) + "," + (OY - 12) + ") rotate(-50)", text: words[j] }, svg);
+      colLab.push(t);
+    }
+    S("text", { class: "qkv-col", x: OX, y: 14, text: "被注意的 token →" }, svg);
+    S("text", { class: "qkv-col", x: 0, y: OY - 26, text: "查詢 ↓" }, svg);
+    for (var i = 0; i < n; i++) (function (i) {
+      var lab = S("text", { class: "mx-lab", x: OX - 12, y: OY + i * C + C / 2, "text-anchor": "end", text: words[i] }, svg);
+      rowLab.push(lab);
+      var r = [], pr = [];
+      for (var j = 0; j < n; j++) {
+        var c = S("rect", { class: "mx-cell", x: OX + j * C + 1, y: OY + i * C + 1, width: C - 2, height: C - 2, fill: "var(--data-k)", "fill-opacity": 0 }, svg);
+        c.addEventListener("mouseenter", function () { row = i; paint(); });
+        r.push(c);
+        pr.push(S("text", { class: "mx-pct", x: OX + j * C + C / 2, y: OY + i * C + C / 2 }, svg));
+      }
+      cellEls.push(r); pctEls.push(pr);
+      // 鍵盤可用的列選擇器
+      var hit = S("rect", { x: 0, y: OY + i * C, width: OX - 4, height: C, fill: "transparent", tabindex: "0", role: "button", "aria-label": "查看第 " + (i + 1) + " 列「" + words[i] + "」" }, svg);
+      hit.addEventListener("focus", function () { row = i; paint(); });
+      hit.addEventListener("mouseenter", function () { row = i; paint(); });
+    })(i);
+    var rowHi = S("rect", { class: "mx-row-hi", x: OX, y: OY + row * C, width: n * C, height: C }, svg);
+
+    var list = document.getElementById("mx-row"), title = document.getElementById("mx-row-title"), narr = document.getElementById("mx-narr");
+    var items = words.map(function (w) {
+      var li = FL.el("li", {}, list);
+      FL.el("span", { text: w }, li);
+      var b = FL.el("span", { class: "b" }, li); var bi = FL.el("i", {}, b);
+      var p = FL.el("span", { class: "p" }, li);
+      return { bi: bi, p: p };
+    });
+    var NARR = [
+      "頭 A 追蹤<b>指代與語意關係</b>：「它」強烈看向「貓」，「累」也回頭找「貓」。",
+      "頭 B 幾乎只看<b>前一個 token</b>，形成一條緊貼對角線左側的斜帶——它幫模型掌握詞序。",
+      "頭 C 把注意力<b>匯聚在句首</b>與標點上。當沒有特別需要關注的對象時，模型常把權重「停放」在這裡。"
+    ];
+
+    function paint() {
+      for (var i = 0; i < n; i++) {
+        var w = weights(head, i);
+        for (var j = 0; j < n; j++) {
+          var masked = causal && j > i;
+          cellEls[i][j].classList.toggle("masked", masked);
+          cellEls[i][j].setAttribute("fill-opacity", masked ? 0 : Math.min(0.92, Math.sqrt(w[j]) * 1.05).toFixed(3));
+          pctEls[i][j].textContent = !masked && w[j] >= 0.2 ? Math.round(w[j] * 100) : "";
+          pctEls[i][j].style.fill = w[j] > 0.45 ? "var(--surface-page)" : "var(--text)";
+        }
+        rowLab[i].classList.toggle("on", i === row);
+      }
+      rowHi.setAttribute("y", OY + row * C);
+      var wr = weights(head, row);
+      title.textContent = "第 " + (row + 1) + " 列：「" + words[row] + "」的權重分配";
+      items.forEach(function (it, j) {
+        var masked = causal && j > row;
+        it.bi.style.width = (wr[j] * 100).toFixed(1) + "%";
+        it.p.textContent = masked ? "遮罩" : Math.round(wr[j] * 100) + "%";
+      });
+      narr.innerHTML = NARR[head] + (causal ? " 右上方的斜線區是<b>因果遮罩</b>：每個字只看得到過去。" : " 目前是<b>雙向</b>模式（類似 BERT），每個字都能看到整句。");
+    }
+
+    plate.querySelectorAll("[data-head]").forEach(function (b) {
+      b.addEventListener("click", function () {
+        head = +b.dataset.head;
+        plate.querySelectorAll("[data-head]").forEach(function (x) { x.setAttribute("aria-pressed", x === b ? "true" : "false"); });
+        paint();
+      });
+    });
+    plate.querySelectorAll("[data-mask]").forEach(function (b) {
+      b.addEventListener("click", function () {
+        causal = b.dataset.mask === "1";
+        plate.querySelectorAll("[data-mask]").forEach(function (x) { x.setAttribute("aria-pressed", x === b ? "true" : "false"); });
+        paint();
+      });
+    });
+    paint();
+  })();
+})();
+</script>
+</body>
+</html>

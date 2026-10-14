@@ -1,0 +1,176 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>元件預覽 · 圖解手記</title>
+<meta name="description" content="圖解手記的設計 tokens 與元件預覽：StyleGenome、色彩、字體、控制元件與圖版。">
+<script>try{var t=localStorage.getItem("fl-theme");if(t)document.documentElement.setAttribute("data-theme",t)}catch(e){}</script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,300..700;1,9..144,400&family=JetBrains+Mono:wght@400;500;600&family=Noto+Sans+TC:wght@400;500;700&family=Noto+Serif+TC:wght@700&display=swap">
+<link rel="stylesheet" href="assets/css/site.css">
+<style>
+  .pv-sec { display: grid; grid-template-columns: minmax(0, 3fr) minmax(0, 9fr); gap: var(--s-6); padding: var(--s-6) 0; border-top: 1px solid var(--rule); }
+  .pv-sec > h2 { margin: 0; font: 700 1.2rem/1.3 var(--f-display); }
+  .pv-sec > h2 small { display: block; margin-top: var(--s-1); }
+  @media (max-width: 860px) { .pv-sec { grid-template-columns: 1fr; gap: var(--s-3); } }
+  .sw { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); border-top: 1px solid var(--rule-strong); }
+  .sw li { display: grid; grid-template-columns: 28px 1fr; gap: var(--s-2); align-items: center; padding: var(--s-2) 0; border-bottom: 1px solid var(--rule); }
+  .sw i { width: 28px; height: 28px; background: var(--c); border: 1px solid var(--rule); }
+  .sw span { font: 500 .72rem/1.3 var(--f-mono); color: var(--text-muted); }
+  .type-row { display: grid; grid-template-columns: 8rem 1fr; gap: var(--s-4); align-items: baseline; padding: var(--s-3) 0; border-bottom: 1px solid var(--rule); }
+  .row-gap { display: flex; flex-wrap: wrap; gap: var(--s-3); align-items: center; }
+  pre.genome { font: 400 .8rem/1.6 var(--f-mono); background: var(--surface-sunken); padding: var(--s-4) var(--s-5); margin: 0; overflow-x: auto; border-left: 2px solid var(--rule-strong); }
+</style>
+</head>
+<body>
+<a class="skip-link" href="#main">跳到主要內容</a>
+<header class="masthead"><div class="masthead-inner">
+  <a class="brand" href="index.html">
+    <svg class="brand-mark" viewBox="0 0 26 26" aria-hidden="true"><rect class="bm-frame" x="1" y="1" width="24" height="24"/><path class="bm-line" d="M1 19 L9 12 L15 16 L25 6"/><circle class="bm-dot" cx="15" cy="16" r="2.6"/></svg>
+    <span class="brand-name">圖解手記<small>Visual Field Notes</small></span>
+  </a>
+  <nav class="site-nav" aria-label="主要">
+    <a href="index.html#categories" class="nav-optional">分類</a>
+    <a href="llm/index.html">LLM 理論</a>
+    <a href="preview.html" aria-current="page" class="nav-optional">元件</a>
+  </nav>
+  <button class="theme-toggle" type="button" aria-label="切換主題"><svg viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="6"/><path d="M8 2a6 6 0 0 0 0 12z" fill="currentColor"/></svg></button>
+</div></header>
+
+<main id="main" class="page">
+  <header class="chapter-head">
+    <p class="chapter-num" aria-hidden="true">U<span class="num-accent">I</span></p>
+    <div>
+      <p class="meta-label">設計系統 · 元件預覽</p>
+      <h1 class="chapter-title">元件預覽<span class="en">Component preview</span></h1>
+      <p class="chapter-deck">全站共用的 tokens 與元件集中在這一頁。新增分類或章節時，先從這裡挑元件，不要另外發明新樣式。</p>
+    </div>
+  </header>
+
+  <section class="pv-sec">
+    <h2>StyleGenome<small class="meta-label">藝術方向契約</small></h2>
+    <pre class="genome">concept:    Visual Field Notes（圖解手記）
+primary:    scientific-editorial      # 出版物的版面層級
+secondary:  technical-instrumentation # 等寬 metadata、FIG 編號、讀數
+layout:     asymmetric 3/9 欄 · 左側導覽 rail · 偏左構圖
+type:       Fraunces + Noto Serif TC（標題）/ Noto Sans TC（內文）/ JetBrains Mono（metadata）
+color:      暖色紙張 · 墨色 · 單一朱紅強調；Q/K/V 資料色只在圖版內出現
+surface:    平面紙張 + 圖版方格紙紋理；無陰影
+shape:      2px 直角；按鈕與標籤都不用 pill
+components: ruled rows / 圖版 / 側線註記；不使用卡片網格
+motion:     Draw · Reveal · Sequence · Ticker；ease-out (.2,0,0,1)；無 bounce
+            reduced-motion → 直接顯示最終狀態
+signature:  超大描邊章節數字 · FIG 標本標籤 · 方格紙圖版
+avoid:      漸層 hero · 三欄 icon 卡片 · 全站 fade-up · 玻璃擬態</pre>
+  </section>
+
+  <section class="pv-sec">
+    <h2>色彩<small class="meta-label">語意 tokens</small></h2>
+    <ul class="sw">
+      <li style="--c:var(--surface-page)"><i></i><span>surface-page</span></li>
+      <li style="--c:var(--surface-raised)"><i></i><span>surface-raised</span></li>
+      <li style="--c:var(--surface-sunken)"><i></i><span>surface-sunken</span></li>
+      <li style="--c:var(--text)"><i></i><span>text</span></li>
+      <li style="--c:var(--text-muted)"><i></i><span>text-muted</span></li>
+      <li style="--c:var(--rule)"><i></i><span>rule</span></li>
+      <li style="--c:var(--accent)"><i></i><span>accent</span></li>
+      <li style="--c:var(--data-q)"><i></i><span>data-q</span></li>
+      <li style="--c:var(--data-k)"><i></i><span>data-k</span></li>
+      <li style="--c:var(--data-v)"><i></i><span>data-v</span></li>
+      <li style="--c:var(--data-hi)"><i></i><span>data-hi</span></li>
+    </ul>
+  </section>
+
+  <section class="pv-sec">
+    <h2>字體<small class="meta-label">三種聲音</small></h2>
+    <div>
+      <div class="type-row"><span class="meta-label">Display</span><span style="font:700 2rem/1.2 var(--f-display)">自注意力 <i style="font-weight:400">Self-Attention</i></span></div>
+      <div class="type-row"><span class="meta-label">Body</span><span>每個 token 都要決定該參考誰、參考多少。</span></div>
+      <div class="type-row"><span class="meta-label">Metadata</span><span class="meta-label" style="color:var(--text)">FIG 3.2 · 第 03 章 · 12 分鐘</span></div>
+    </div>
+  </section>
+
+  <section class="pv-sec">
+    <h2>控制元件<small class="meta-label">Button · Segmented · Slider · Input</small></h2>
+    <div style="display:grid;gap:var(--s-4)">
+      <div class="row-gap">
+        <button class="btn btn-primary" type="button">主要動作</button>
+        <button class="btn" type="button">次要動作</button>
+        <button class="btn btn-ghost" type="button">低強調</button>
+        <button class="btn btn-ghost btn-sm" type="button" disabled>停用</button>
+      </div>
+      <div class="row-gap">
+        <div class="seg" role="group" aria-label="範例"><button type="button" aria-pressed="true">雙向</button><button type="button" aria-pressed="false">因果遮罩</button></div>
+        <div class="field"><label for="pv-r">溫度</label><input id="pv-r" type="range" min="0" max="2" step="0.1" value="1"><output for="pv-r" id="pv-o">1.0</output></div>
+      </div>
+      <input class="text-input" type="text" value="Hello, 世界" aria-label="範例輸入">
+      <div class="row-gap">
+        <span class="tok">Hello<small>#15496</small></span><span class="tok">,<small>#11</small></span><span class="tok"> 世界<small>#30590</small></span>
+        <span class="status status-live">上線</span><span class="status status-planned">籌備中</span>
+      </div>
+    </div>
+  </section>
+
+  <section class="pv-sec">
+    <h2>圖版<small class="meta-label">Plate · Stepper</small></h2>
+    <figure class="plate" id="pv-plate" style="margin:0">
+      <div class="plate-head"><span class="plate-fig">FIG X.1</span><h3 class="plate-title">逐步播放器範例</h3><span class="plate-hint">← → 鍵</span></div>
+      <div class="plate-stage" style="min-height:160px">
+        <svg viewBox="0 0 600 120" class="stage-svg" id="pv-svg" aria-hidden="true"></svg>
+      </div>
+      <div class="plate-controls">
+        <button class="btn btn-ghost btn-sm" type="button" data-step="prev" aria-label="上一步"><svg viewBox="0 0 14 14"><path d="M9 2 4 7l5 5"/></svg></button>
+        <button class="btn btn-primary btn-sm" type="button" data-step="play" aria-pressed="false"><svg viewBox="0 0 14 14"><path d="M4 2.5v9l7-4.5z" fill="currentColor"/></svg><span class="lbl">播放</span></button>
+        <button class="btn btn-ghost btn-sm" type="button" data-step="next" aria-label="下一步"><svg viewBox="0 0 14 14"><path d="m5 2 5 5-5 5"/></svg></button>
+        <ol class="steps"></ol><span class="step-count"></span>
+        <span class="spacer"></span>
+        <button class="btn btn-ghost btn-sm" type="button" data-step="reset">重設</button>
+      </div>
+      <p class="plate-narr"></p>
+      <p class="plate-cap">圖說放在最下方，用較小的灰字。</p>
+    </figure>
+  </section>
+
+  <section class="pv-sec">
+    <h2>內文元件<small class="meta-label">Note · Formula · Takeaways</small></h2>
+    <div class="prose">
+      <div class="note"><span class="meta-label">註</span><p>側線註記取代卡片，用來補充旁支知識。</p></div>
+      <div class="formula">softmax(<var>x</var>)ᵢ = exp(<var>x</var>ᵢ) / Σⱼ exp(<var>x</var>ⱼ)</div>
+      <ol class="takeaways"><li>重點條列使用編號 ruled rows。</li><li>每章結尾固定出現。</li></ol>
+    </div>
+  </section>
+</main>
+
+<footer class="site-foot"><div class="site-foot-inner">
+  <p>圖解手記 · Visual Field Notes</p>
+  <p>設計系統 v1</p>
+</div></footer>
+
+<script src="assets/js/catalog.js"></script>
+<script src="assets/js/site.js"></script>
+<script>
+(function () {
+  var r = document.getElementById("pv-r"), o = document.getElementById("pv-o");
+  r.addEventListener("input", function () { o.textContent = (+r.value).toFixed(1); });
+  document.querySelectorAll(".seg button").forEach(function (b) {
+    b.addEventListener("click", function () { b.parentNode.querySelectorAll("button").forEach(function (x) { x.setAttribute("aria-pressed", x === b ? "true" : "false"); }); });
+  });
+  var svg = document.getElementById("pv-svg"), S = FL.svg, boxes = [];
+  ["文字", "token", "向量", "輸出"].forEach(function (t, i) {
+    var g = S("g", { style: "transition:opacity 480ms cubic-bezier(.2,0,0,1)" }, svg);
+    S("rect", { x: 20 + i * 150, y: 40, width: 110, height: 40, fill: "var(--surface-page)", stroke: "var(--rule-strong)" }, g);
+    S("text", { x: 75 + i * 150, y: 60, text: t, "text-anchor": "middle", "dominant-baseline": "central", style: "font:500 15px var(--f-body);fill:var(--text)" }, g);
+    if (i < 3) S("path", { d: "M" + (134 + i * 150) + " 60 h32", stroke: "var(--accent)", "stroke-width": 1.5 }, g);
+    boxes.push(g);
+  });
+  FL.stepper(document.getElementById("pv-plate"), {
+    steps: [{ narr: "第一步：<b>文字</b>進入管線。" }, { narr: "第二步：切成 <b>token</b>。" }, { narr: "第三步：查表得到<b>向量</b>。" }, { narr: "第四步：產生<b>輸出</b>。" }],
+    autoplay: 1400,
+    render: function (i) { boxes.forEach(function (g, j) { g.style.opacity = j <= i ? 1 : 0.15; }); }
+  });
+})();
+</script>
+</body>
+</html>

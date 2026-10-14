@@ -1,0 +1,280 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>圖解手記 · Visual Field Notes</title>
+<meta name="description" content="用可操作的動畫圖版理解知識體系。第一個分類：LLM 理論。">
+<script>try{var t=localStorage.getItem("fl-theme");if(t)document.documentElement.setAttribute("data-theme",t)}catch(e){}</script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,300..700;1,9..144,400&family=JetBrains+Mono:wght@400;500;600&family=Noto+Sans+TC:wght@400;500;700&family=Noto+Serif+TC:wght@700&display=swap">
+<link rel="stylesheet" href="assets/css/site.css">
+<style>
+  /* ---- 首頁：非對稱 12 欄，左側標題壓住、右側活標本 ---- */
+  .hero { display: grid; grid-template-columns: minmax(0, 5fr) minmax(0, 7fr); gap: var(--s-6); padding: var(--s-8) 0 var(--s-7); border-bottom: 1px solid var(--rule-strong); align-items: end; }
+  .hero h1 { margin: var(--s-3) 0 var(--s-5); font: 700 clamp(2.4rem, 5.4vw, 4.4rem)/1.08 var(--f-display); letter-spacing: -.015em; text-wrap: balance; }
+  .hero h1 em { font-style: italic; font-weight: 400; color: var(--accent); }
+  .hero-deck { margin: 0 0 var(--s-5); max-width: 40ch; font-size: 1.08rem; color: var(--text-muted); }
+  .hero-meta { display: grid; grid-template-columns: repeat(3, auto); justify-content: start; gap: var(--s-1) var(--s-6); margin: 0; }
+  .hero-meta dt { font: 500 .7rem/1.3 var(--f-mono); letter-spacing: .08em; text-transform: uppercase; color: var(--text-muted); grid-row: 1; }
+  .hero-meta dd { margin: 0; font: 300 2.4rem/1 var(--f-display); font-variant-numeric: tabular-nums; grid-row: 2; }
+  .hero .plate { margin: 0; }
+  .hero .plate-stage { min-height: 0; padding: var(--s-4); }
+  #specimen { width: 100%; height: auto; display: block; }
+  .sp-tok rect { fill: var(--surface-page); stroke: var(--rule-strong); }
+  .sp-tok text { font: 500 17px var(--f-body); fill: var(--text); text-anchor: middle; dominant-baseline: central; }
+  .sp-tok { opacity: 0; transform: translateY(8px); transition: opacity var(--dur-3) var(--ease-out), transform var(--dur-3) var(--ease-out); }
+  .sp-tok.in { opacity: 1; transform: none; }
+  .sp-tok.pred rect { fill: var(--accent); stroke: var(--accent); }
+  .sp-tok.pred text { fill: #fff; }
+  .sp-tok.last rect { stroke: var(--data-q); stroke-width: 2; }
+  .sp-arc { fill: none; stroke: var(--data-k); stroke-linecap: round; transition: opacity var(--dur-2) linear; }
+  .sp-cand { transition: opacity var(--dur-2) linear; }
+  .sp-cand text { font: 500 14px var(--f-body); fill: var(--text); dominant-baseline: central; }
+  .sp-cand .pct { font: 500 12px var(--f-mono); fill: var(--text-muted); }
+  .sp-bar { fill: var(--surface-ink); transition: width var(--dur-3) var(--ease-out); }
+  .sp-cand.win .sp-bar { fill: var(--accent); }
+  .sp-cand.win text:first-child { font-weight: 700; }
+  .sp-lbl { font: 600 10.5px var(--f-mono); letter-spacing: .1em; fill: var(--text-muted); }
+  @media (max-width: 900px) { .hero { grid-template-columns: 1fr; padding-top: var(--s-6); } }
+
+  /* ---- 分類索引：ruled rows ---- */
+  .section-head { display: grid; grid-template-columns: minmax(0, 5fr) minmax(0, 7fr); gap: var(--s-6); padding: var(--s-8) 0 var(--s-4); align-items: baseline; }
+  .section-head h2 { margin: 0; font: 700 clamp(1.6rem, 3vw, 2.2rem)/1.2 var(--f-display); display: flex; gap: var(--s-4); align-items: baseline; }
+  .section-head h2 .sec { font: 500 .8rem/1 var(--f-mono); color: var(--accent); letter-spacing: .06em; }
+  .section-head p { margin: 0; color: var(--text-muted); max-width: 60ch; }
+  @media (max-width: 900px) { .section-head { grid-template-columns: 1fr; gap: var(--s-2); } }
+
+  .cat-list { list-style: none; margin: 0; padding: 0; border-top: 1px solid var(--rule-strong); }
+  .cat { border-bottom: 1px solid var(--rule); }
+  .cat-row { display: grid; grid-template-columns: 4.5rem minmax(0, 4fr) minmax(0, 5fr) 6rem 6rem; gap: var(--s-4); align-items: baseline; padding: var(--s-5) 0; text-decoration: none; color: inherit; }
+  a.cat-row:hover { color: inherit; }
+  a.cat-row:hover .cat-title { color: var(--accent); }
+  .cat-no { font: 300 2.2rem/1 var(--f-display); color: var(--text-faint); font-variant-numeric: tabular-nums; }
+  .cat.is-live .cat-no { color: var(--accent); }
+  .cat-title { font: 700 1.4rem/1.3 var(--f-display); transition: color var(--dur-1) linear; }
+  .cat-title small { display: block; font: italic 400 .9rem/1.4 var(--f-display); color: var(--text-muted); }
+  .cat-sum { font-size: .94rem; color: var(--text-muted); }
+  .cat-count { font: 500 .78rem/1.4 var(--f-mono); color: var(--text-muted); }
+  .cat-row .status { justify-self: end; }
+  .cat:not(.is-live) .cat-title { color: var(--text-muted); }
+  .cat-chapters { list-style: none; margin: 0 0 var(--s-5); padding: 0 0 0 calc(4.5rem + var(--s-4)); display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); column-gap: var(--s-6); }
+  .cat-chapters a { display: grid; grid-template-columns: 2.4rem 1fr; gap: var(--s-2); padding: var(--s-2) 0; border-top: 1px solid var(--rule); text-decoration: none; font-size: .95rem; }
+  .cat-chapters a span { font: 500 .76rem/1.9 var(--f-mono); color: var(--text-faint); }
+  .cat-chapters a:hover span { color: var(--accent); }
+  @media (max-width: 900px) {
+    .cat-row { grid-template-columns: 3rem minmax(0, 1fr) auto; }
+    .cat-sum { grid-column: 2 / -1; grid-row: 2; }
+    .cat-count { display: none; }
+    .cat-chapters { padding-left: calc(3rem + var(--s-4)); grid-template-columns: 1fr; }
+  }
+
+  /* ---- 使用方式 ---- */
+  .howto { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); border-top: 1px solid var(--rule-strong); }
+  .howto li { padding: var(--s-5) var(--s-5) var(--s-5) 0; }
+  .howto li + li { border-left: 1px solid var(--rule); padding-left: var(--s-5); }
+  .howto b { display: block; font: 700 1.1rem/1.4 var(--f-display); margin: var(--s-2) 0; }
+  .howto p { margin: 0; color: var(--text-muted); font-size: .94rem; }
+  @media (max-width: 760px) { .howto { grid-template-columns: 1fr; } .howto li + li { border-left: 0; border-top: 1px solid var(--rule); padding-left: 0; } }
+</style>
+</head>
+<body>
+<a class="skip-link" href="#main">跳到主要內容</a>
+<header class="masthead"><div class="masthead-inner">
+  <a class="brand" href="index.html" aria-current="page">
+    <svg class="brand-mark" viewBox="0 0 26 26" aria-hidden="true"><rect class="bm-frame" x="1" y="1" width="24" height="24"/><path class="bm-line" d="M1 19 L9 12 L15 16 L25 6"/><circle class="bm-dot" cx="15" cy="16" r="2.6"/></svg>
+    <span class="brand-name">圖解手記<small>Visual Field Notes</small></span>
+  </a>
+  <nav class="site-nav" aria-label="主要">
+    <a href="#categories" class="nav-optional">分類</a>
+    <a href="llm/index.html">LLM 理論</a>
+    <a href="preview.html" class="nav-optional">元件</a>
+  </nav>
+  <button class="theme-toggle" type="button" aria-label="切換主題"><svg viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="6"/><path d="M8 2a6 6 0 0 0 0 12z" fill="currentColor"/></svg></button>
+</div></header>
+
+<main id="main" class="page">
+  <section class="hero" aria-labelledby="hero-title">
+    <div>
+      <p class="meta-label">知識圖版集 · 第一版</p>
+      <h1 id="hero-title">把抽象的知識<br><em>畫出來</em>，再讓它動起來。</h1>
+      <p class="hero-deck">每個概念都配一張可以操作的圖版：拖動滑桿、逐步播放、點選元素，親手看見機制怎麼運作。</p>
+      <dl class="hero-meta" id="hero-stats">
+        <dt>分類</dt><dd data-stat="cats">0</dd>
+        <dt>章節</dt><dd data-stat="chapters">0</dd>
+        <dt>上線中</dt><dd data-stat="live">0</dd>
+      </dl>
+    </div>
+
+    <figure class="plate" aria-labelledby="sp-title">
+      <div class="plate-head">
+        <span class="plate-fig">FIG 0</span>
+        <h2 class="plate-title" id="sp-title">一個語言模型在做的事：看前文、猜下一個字</h2>
+        <button class="btn btn-ghost btn-sm" type="button" id="sp-toggle" aria-pressed="true">暫停</button>
+      </div>
+      <div class="plate-stage">
+        <svg id="specimen" viewBox="0 0 540 330" role="img" aria-label="示意動畫：模型讀入前文 token，透過注意力參考前文，輸出下一個 token 的機率並選出最高者。"></svg>
+      </div>
+      <p class="plate-cap">分詞 → 注意力 → 機率分布 → 取樣。這四步就是 LLM 理論分類的主線，每一步都有獨立章節。</p>
+    </figure>
+  </section>
+
+  <section aria-labelledby="cat-title" id="categories">
+    <div class="section-head">
+      <h2 id="cat-title"><span class="sec">§ 01</span>分類索引</h2>
+      <p>知識被拆成多個分類區塊，每個分類是一條由淺入深的章節路徑。目前開放 LLM 理論，其餘分類籌備中。</p>
+    </div>
+    <ol class="cat-list" id="cat-list"></ol>
+  </section>
+
+  <section aria-labelledby="how-title">
+    <div class="section-head">
+      <h2 id="how-title"><span class="sec">§ 02</span>怎麼讀</h2>
+      <p>每一章都是同樣的節奏，讀熟一章，其他章就不用重新適應。</p>
+    </div>
+    <ol class="howto">
+      <li><span class="meta-label">01 · 問題</span><b>先丟出一個具體的困惑</b><p>例如「它」到底指誰？用一個例子讓你感覺到為什麼需要這個機制。</p></li>
+      <li><span class="meta-label">02 · 圖版</span><b>動手操作 FIG 圖版</b><p>逐步播放計算過程，或拖動參數看結果即時改變。方向鍵可以切換步驟。</p></li>
+      <li><span class="meta-label">03 · 收斂</span><b>公式與重點條列</b><p>看懂圖之後再看公式，最後用重點清單把章節收起來。</p></li>
+    </ol>
+  </section>
+</main>
+
+<footer class="site-foot"><div class="site-foot-inner">
+  <p>圖解手記 · Visual Field Notes</p>
+  <p>圖版數值為教學示意</p>
+</div></footer>
+
+<script src="assets/js/catalog.js"></script>
+<script src="assets/js/site.js"></script>
+<script>
+(function () {
+  "use strict";
+  var cat = window.FL_CATALOG.categories;
+
+  /* ---- 統計數字（Ticker） ---- */
+  var stats = {
+    cats: cat.length,
+    chapters: cat.reduce(function (s, c) { return s + c.chapters.length; }, 0),
+    live: cat.filter(function (c) { return c.status === "live"; }).length
+  };
+  var statEls = document.querySelectorAll("[data-stat]");
+  FL.inView(document.getElementById("hero-stats"), function () {
+    statEls.forEach(function (el) { FL.ticker(el, stats[el.dataset.stat], { digits: 0, duration: 900 }); });
+  });
+
+  /* ---- 分類索引 ---- */
+  var list = document.getElementById("cat-list");
+  cat.forEach(function (c) {
+    var li = FL.el("li", { class: "cat" + (c.status === "live" ? " is-live" : "") }, list);
+    var row = FL.el(c.status === "live" ? "a" : "div", { class: "cat-row" }, li);
+    if (c.status === "live") row.setAttribute("href", c.id + "/index.html");
+    FL.el("span", { class: "cat-no", text: c.no }, row);
+    var t = FL.el("span", { class: "cat-title", text: c.title }, row);
+    FL.el("small", { text: c.en }, t);
+    FL.el("span", { class: "cat-sum", text: c.summary }, row);
+    FL.el("span", { class: "cat-count", text: c.chapters.length ? c.chapters.length + " 章" : "—" }, row);
+    FL.el("span", { class: "status " + (c.status === "live" ? "status-live" : "status-planned"), text: c.status === "live" ? "上線" : "籌備中" }, row);
+    if (c.chapters.length) {
+      var ul = FL.el("ol", { class: "cat-chapters", "aria-label": c.title + " 章節" }, li);
+      c.chapters.forEach(function (ch) {
+        var a = FL.el("a", { href: c.id + "/" + ch.slug + ".html" }, FL.el("li", {}, ul));
+        FL.el("span", { text: ch.no }, a);
+        a.appendChild(document.createTextNode(ch.title + " · " + ch.en));
+      });
+    }
+  });
+
+  /* ---- FIG 0：活標本 ---- */
+  var S = FL.svg, svg = document.getElementById("specimen");
+  var SCENES = [
+    { toks: ["我", "喜歡", "喝"], w: [0.18, 0.34, 0.48], cands: [["咖啡", 0.62], ["茶", 0.21], ["水", 0.09], ["酒", 0.05]] },
+    { toks: ["貓", "坐在", "窗", "邊"], w: [0.42, 0.22, 0.2, 0.16], cands: [["曬", 0.48], ["睡", 0.27], ["看", 0.15], ["發呆", 0.06]] },
+    { toks: ["今天", "天氣", "很"], w: [0.24, 0.52, 0.24], cands: [["好", 0.55], ["熱", 0.24], ["冷", 0.12], ["晴朗", 0.06]] }
+  ];
+  var ROW = 262, TW = 78, GAP = 18, X0 = 24;
+  S("text", { class: "sp-lbl", x: 24, y: 20, text: "下一個 TOKEN 的機率" }, svg);
+  S("text", { class: "sp-lbl", x: 24, y: ROW + 56, text: "輸入 →" }, svg);
+  var gArcs = S("g", {}, svg), gToks = S("g", {}, svg), gCands = S("g", {}, svg);
+  var cands = [];
+  for (var c = 0; c < 4; c++) {
+    var g = S("g", { class: "sp-cand", transform: "translate(24," + (44 + c * 30) + ")" }, gCands);
+    var t = S("text", { x: 0, y: 0 }, g);
+    S("rect", { x: 64, y: -7, width: 300, height: 14, fill: "var(--surface-sunken)" }, g);
+    var bar = S("rect", { class: "sp-bar", x: 64, y: -7, width: 0, height: 14 }, g);
+    var pct = S("text", { class: "pct", x: 374, y: 0 }, g);
+    cands.push({ g: g, t: t, bar: bar, pct: pct });
+  }
+  function xOf(i) { return X0 + i * (TW + GAP); }
+  function tok(i, label, cls) {
+    var g = S("g", { class: "sp-tok " + (cls || "") }, gToks);
+    S("rect", { x: xOf(i), y: ROW - 18, width: TW, height: 36, rx: 2 }, g);
+    S("text", { x: xOf(i) + TW / 2, y: ROW, text: label }, g);
+    return g;
+  }
+
+  var scene = 0, timers = [], running = !FL.reducedMotion();
+  function later(fn, ms) { timers.push(setTimeout(fn, ms)); }
+  function clear() { timers.forEach(clearTimeout); timers = []; }
+
+  function play(final) {
+    clear();
+    var sc = SCENES[scene], n = sc.toks.length;
+    gArcs.innerHTML = ""; gToks.innerHTML = "";
+    cands.forEach(function (c) { c.g.classList.remove("win"); c.g.style.opacity = 0; c.bar.setAttribute("width", 0); });
+    var els = sc.toks.map(function (w, i) { return tok(i, w, i === n - 1 ? "last" : ""); });
+    var T = final ? 0 : 1;
+    // 1) token 依序出現
+    els.forEach(function (el, i) { later(function () { el.classList.add("in"); }, T * (200 + i * 260)); });
+    var t1 = T * (200 + n * 260 + 200);
+    // 2) 從最後一個 token 畫出注意力弧
+    later(function () {
+      var xl = xOf(n - 1) + TW / 2;
+      sc.w.forEach(function (w, j) {
+        var xj = xOf(j) + TW / 2, d;
+        if (j === n - 1) d = "M" + (xl - 12) + " " + (ROW - 18) + " C " + (xl - 30) + " " + (ROW - 70) + " " + (xl + 30) + " " + (ROW - 70) + " " + (xl + 12) + " " + (ROW - 18);
+        else d = "M" + xl + " " + (ROW - 18) + " Q " + (xl + xj) / 2 + " " + (ROW - 18 - 40 - (xl - xj) * 0.35) + " " + xj + " " + (ROW - 18);
+        var p = S("path", { class: "sp-arc", d: d, "stroke-width": (1 + w * 10).toFixed(1), opacity: (0.3 + w).toFixed(2) }, gArcs);
+        if (!final) FL.drawIn(p, j * 120);
+      });
+    }, t1);
+    var t2 = t1 + T * 1100;
+    // 3) 機率條
+    later(function () {
+      sc.cands.forEach(function (cd, k) {
+        var c = cands[k];
+        c.t.textContent = cd[0];
+        c.g.style.opacity = 1;
+        c.bar.setAttribute("width", (cd[1] * 300).toFixed(1));
+        if (final) c.pct.textContent = Math.round(cd[1] * 100) + "%";
+        else pctTick(c.pct, cd[1] * 100);
+      });
+    }, t2);
+    // 4) 選出最高者並接到輸入
+    var t3 = t2 + T * 1000;
+    later(function () {
+      cands[0].g.classList.add("win");
+      var p = tok(n, sc.cands[0][0], "pred");
+      requestAnimationFrame(function () { p.classList.add("in"); });
+      if (final) p.classList.add("in");
+    }, t3);
+    if (!final && running) later(function () { scene = (scene + 1) % SCENES.length; play(); }, t3 + 2400);
+  }
+  function pctTick(el, to) {
+    FL.tween(500, function (e) { el.textContent = Math.round(to * e) + "%"; });
+  }
+
+  var toggle = document.getElementById("sp-toggle");
+  function setRunning(on) {
+    running = on;
+    toggle.setAttribute("aria-pressed", on ? "true" : "false");
+    toggle.textContent = on ? "暫停" : "播放";
+    if (on) play(); else { clear(); play(true); }
+  }
+  toggle.addEventListener("click", function () { setRunning(!running); });
+  FL.inView(svg, function () { setRunning(running); });
+})();
+</script>
+</body>
+</html>
