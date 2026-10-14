@@ -134,6 +134,19 @@ avoid:      漸層 hero · 三欄 icon 卡片 · 全站 fade-up · 玻璃擬態<
   </section>
 
   <section class="pv-sec">
+    <h2>動手做圖版<small class="meta-label">Lab plate · FL.drag</small></h2>
+    <figure class="plate is-lab" id="pv-lab" style="margin:0">
+      <div class="plate-head"><span class="plate-fig">FIG X.2<span class="lab-tag">動手做</span></span><h3 class="plate-title">拖曳控制點範例</h3><span class="plate-hint">拖曳 / 方向鍵</span></div>
+      <div class="lab-task"><p>把控制點拖到虛線框裡。<span id="pv-done" hidden>✓ 完成</span></p></div>
+      <div class="plate-stage" style="min-height:180px">
+        <svg viewBox="0 0 600 160" class="stage-svg" id="pv-drag" aria-label="拖曳範例"></svg>
+      </div>
+      <p class="plate-narr" id="pv-drag-narr"></p>
+      <p class="plate-cap">任務列放在標題下方；朱紅頂線與「動手做」標籤區分「看」與「做」。控制點可用滑鼠、觸控或方向鍵（Shift 加速）操作。</p>
+    </figure>
+  </section>
+
+  <section class="pv-sec">
     <h2>內文元件<small class="meta-label">Note · Formula · Takeaways</small></h2>
     <div class="prose">
       <div class="note"><span class="meta-label">註</span><p>側線註記取代卡片，用來補充旁支知識。</p></div>
@@ -165,6 +178,28 @@ avoid:      漸層 hero · 三欄 icon 卡片 · 全站 fade-up · 玻璃擬態<
     if (i < 3) S("path", { d: "M" + (134 + i * 150) + " 60 h32", stroke: "var(--accent)", "stroke-width": 1.5 }, g);
     boxes.push(g);
   });
+  var dsvg = document.getElementById("pv-drag"), dn = document.getElementById("pv-drag-narr"), done = document.getElementById("pv-done");
+  S("rect", { x: 440, y: 40, width: 100, height: 80, fill: "var(--accent-soft)", stroke: "var(--accent)", "stroke-dasharray": "4 4" }, dsvg);
+  var line = S("line", { x1: 60, y1: 80, x2: 60, y2: 80, stroke: "var(--rule-strong)", "stroke-dasharray": "3 3" }, dsvg);
+  var hg = S("g", { role: "slider", "aria-label": "控制點", "aria-valuetext": "" }, dsvg);
+  S("circle", { class: "handle-ring", r: 12 }, hg);
+  S("circle", { r: 4, fill: "var(--accent)" }, hg);
+  var pos = { x: 120, y: 80 };
+  function place() {
+    pos.x = FL.clamp(pos.x, 12, 588); pos.y = FL.clamp(pos.y, 12, 148);
+    hg.setAttribute("transform", "translate(" + pos.x + "," + pos.y + ")");
+    line.setAttribute("x2", pos.x); line.setAttribute("y2", pos.y);
+    var inBox = pos.x > 440 && pos.x < 540 && pos.y > 40 && pos.y < 120;
+    done.hidden = !inBox;
+    hg.setAttribute("aria-valuetext", "x " + Math.round(pos.x) + "，y " + Math.round(pos.y));
+    dn.innerHTML = inBox ? "<b>完成。</b>任務達成時打勾，但不阻擋繼續操作。" : "控制點位置：(" + Math.round(pos.x) + ", " + Math.round(pos.y) + ")";
+  }
+  FL.drag(dsvg, hg, {
+    onMove: function (pt) { pos.x = pt.x; pos.y = pt.y; place(); },
+    onKey: function (dx, dy) { pos.x += dx * 4; pos.y += dy * 4; place(); }
+  });
+  place();
+
   FL.stepper(document.getElementById("pv-plate"), {
     steps: [{ narr: "第一步：<b>文字</b>進入管線。" }, { narr: "第二步：切成 <b>token</b>。" }, { narr: "第三步：查表得到<b>向量</b>。" }, { narr: "第四步：產生<b>輸出</b>。" }],
     autoplay: 1400,

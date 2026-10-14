@@ -30,6 +30,7 @@ llm/                    LLM 理論分類
 1. 在 `assets/js/catalog.js` 對應分類的 `chapters` 加一筆。
 2. 複製任一章節 HTML 當骨架，改 `body` 的 `data-track` / `data-chapter`。
 3. 圖版使用 `figure.plate` 結構；逐步動畫用 `FL.stepper(plate, { steps, render })`。
+4. 讓讀者自己操作的實驗用「動手做」圖版：`figure.plate.is-lab` + `.lab-tag` + `.lab-task`，拖曳控制點用 `FL.drag(svg, handle, { onMove, onKey })`（支援滑鼠、觸控與方向鍵）；在 catalog 的章節加上 `lab` 欄位，目錄頁會標示出來。範例見 `preview.html`。
 
 ## 本機預覽
 

@@ -234,6 +234,7 @@ code, kbd, samp { font-family: var(--f-mono); font-size: .88em; }
 .rail-figs { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; }
 .rail-figs a { font: 500 .74rem/1.5 var(--f-mono); text-decoration: none; color: var(--text-muted); }
 .rail-figs a:hover { color: var(--accent); }
+.rail-lab { margin-left: var(--s-2); color: var(--accent); font-weight: 600; }
 @media (max-width: 960px) {
   .chapter-body { grid-template-columns: minmax(0, 1fr); gap: var(--s-4); }
   .rail-inner { position: static; }
@@ -330,6 +331,26 @@ code, kbd, samp { font-family: var(--f-mono); font-size: .88em; }
   font-size: .84rem; color: var(--text-muted); line-height: 1.6;
 }
 .plate-cap::before { content: "圖說 — "; font: 500 .72rem var(--f-mono); color: var(--text-faint); letter-spacing: .06em; }
+
+/* 動手做圖版：朱紅頂線 + 標籤，讓讀者一眼分辨「看」與「做」 */
+.plate.is-lab { border-top: 2px solid var(--accent); }
+.lab-tag {
+  display: inline-block; margin-left: var(--s-2); padding: 3px 6px; vertical-align: 1px;
+  font: 600 .64rem/1 var(--f-mono); letter-spacing: .1em;
+  background: var(--accent); color: var(--surface-page); border-radius: var(--radius-1);
+}
+.lab-task { margin: 0; padding: var(--s-3) var(--s-4); border-bottom: 1px solid var(--rule); font-size: .9rem; display: grid; grid-template-columns: auto 1fr; gap: var(--s-3); align-items: baseline; }
+.lab-task::before { content: "任務"; font: 600 .7rem/1.6 var(--f-mono); letter-spacing: .1em; color: var(--accent); }
+.lab-task p { margin: 0; }
+
+/* 可拖曳控制點（FL.drag） */
+.handle { cursor: grab; touch-action: none; outline: none; }
+.handle.is-dragging { cursor: grabbing; }
+.handle:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+svg .handle:focus-visible { outline: none; }
+svg .handle:focus-visible .handle-ring { stroke: var(--focus); stroke-width: 2.5; }
+.handle-ring { fill: var(--surface-page); stroke: var(--rule-strong); stroke-width: 1.5; }
+.handle:hover .handle-ring, .handle.is-dragging .handle-ring { stroke: var(--accent); }
 
 /* 寬圖在窄螢幕內部橫向捲動（頁面本身不捲動） */
 .stage-scroll { overflow-x: auto; }

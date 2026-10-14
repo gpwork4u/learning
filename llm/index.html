@@ -35,6 +35,8 @@
   .ch-title { font: 700 1.35rem/1.3 var(--f-display); }
   .ch-title small { display: block; font: italic 400 .9rem/1.4 var(--f-display); color: var(--text-muted); }
   .ch-sum { color: var(--text-muted); font-size: .95rem; }
+  .ch-lab { display: flex; align-items: baseline; gap: var(--s-2); margin-top: var(--s-2); font-size: .86rem; color: var(--text); }
+  .ch-lab .lab-tag { margin-left: 0; }
   .ch-go { font: 500 .78rem var(--f-mono); color: var(--text-muted); white-space: nowrap; }
   .ch-list a:hover .ch-go { color: var(--accent); }
   @media (max-width: 860px) {
@@ -114,7 +116,12 @@
     FL.el("span", { class: "ch-no", text: c.no }, a);
     var t = FL.el("span", { class: "ch-title", text: c.title }, a);
     FL.el("small", { text: c.en }, t);
-    FL.el("span", { class: "ch-sum", text: c.summary }, a);
+    var sum = FL.el("span", { class: "ch-sum", text: c.summary }, a);
+    if (c.lab) {
+      var lab = FL.el("span", { class: "ch-lab" }, sum);
+      FL.el("span", { class: "lab-tag", text: "動手做" }, lab);
+      lab.appendChild(document.createTextNode(c.lab));
+    }
     FL.el("span", { class: "ch-go", text: "閱讀 →" }, a);
     rows[c.no] = a;
   });

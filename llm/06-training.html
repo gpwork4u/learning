@@ -51,7 +51,7 @@
   .gd-status[data-s="osc"] { color: var(--data-hi); }
   .gd-status[data-s="div"] { color: var(--data-k); }
   .lr-scale { display: flex; justify-content: space-between; font: 500 .66rem var(--f-mono); color: var(--text-faint); margin-top: 2px; }
-  #gd-svg { width: 100%; height: auto; }
+  #gd-svg { width: 100%; height: auto; cursor: crosshair; }
   #lc-svg { width: 100%; height: auto; }
 
   /* FIG 6.3 三階段管線 */
@@ -90,6 +90,63 @@
   .pp-empty { margin: 0; padding: var(--s-3); border: 1px dashed var(--rule); color: var(--text-muted); font-size: .9rem; }
   .pp-body { min-height: 9em; }
 
+  /* FIG 6.4 你來當標註員 */
+  .rm-wrap { display: grid; grid-template-columns: minmax(0, 1fr) minmax(220px, 300px); gap: var(--s-5); align-items: start; }
+  .rm-wrap > * { min-width: 0; }
+  @media (max-width: 820px) { .rm-wrap { grid-template-columns: minmax(0, 1fr); } }
+  .rm-head { display: flex; justify-content: space-between; align-items: baseline; gap: var(--s-3); margin: 0 0 var(--s-2); }
+  .rm-q { margin: 0 0 var(--s-4); font: 700 1.12rem/1.5 var(--f-body); }
+  .rm-q::before { content: "提問　"; font: 600 .72rem var(--f-mono); color: var(--text-muted); letter-spacing: .08em; }
+  .rm-pred { margin: 0 0 var(--s-3); display: grid; gap: 6px; }
+  .rm-pred p { margin: 0; font-size: .88rem; color: var(--text-muted); }
+  .rm-pred b { color: var(--text); font-family: var(--f-mono); }
+  .rm-split { display: flex; height: 6px; background: var(--surface-sunken); }
+  .rm-split i { display: block; height: 100%; transition: width var(--dur-3) var(--ease-out); }
+  .rm-split .sa { background: var(--data-q); }
+  .rm-split .sb { background: var(--data-k); }
+  .rm-opts { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: var(--s-3); }
+  @media (max-width: 640px) { .rm-opts { grid-template-columns: minmax(0, 1fr); } }
+  .rm-opt {
+    appearance: none; text-align: left; cursor: pointer; display: grid; gap: var(--s-2); align-content: start;
+    padding: var(--s-3) var(--s-4) var(--s-4); min-height: 120px;
+    background: var(--surface-page); border: 1px solid var(--rule-strong); border-radius: var(--radius-1);
+    font: 400 .95rem/1.7 var(--f-body); color: var(--text);
+    transition: background var(--dur-1) linear, border-color var(--dur-1) linear, opacity var(--dur-2) linear;
+  }
+  .rm-opt:hover:not(:disabled) { background: var(--surface-sunken); }
+  .rm-opt:disabled { cursor: default; }
+  .rm-opt .k { font: 600 .74rem/1 var(--f-mono); letter-spacing: .1em; color: var(--text-muted); display: flex; justify-content: space-between; }
+  .rm-opt .k kbd { font: 500 .66rem var(--f-mono); border: 1px solid var(--rule); padding: 1px 4px; border-radius: 2px; }
+  .rm-opt[data-pick="A"] .k span { color: var(--data-q); }
+  .rm-opt[data-pick="B"] .k span { color: var(--data-k); }
+  .rm-opt.picked { border-color: var(--accent); border-width: 2px; padding: calc(var(--s-3) - 1px) calc(var(--s-4) - 1px) calc(var(--s-4) - 1px); }
+  .rm-opt.unpicked { opacity: .45; }
+  .rm-tie { margin-top: var(--s-3); }
+
+  .rm-w { list-style: none; margin: 0 0 var(--s-4); padding: 0; display: grid; gap: 8px; }
+  .rm-w li { display: grid; grid-template-columns: 3.6em minmax(0, 1fr) 3.4em; gap: var(--s-2); align-items: center; font-size: .86rem; }
+  .rm-w .t { position: relative; height: 12px; background: var(--surface-sunken); }
+  .rm-w .t::after { content: ""; position: absolute; left: 50%; top: -3px; bottom: -3px; width: 1px; background: var(--rule-strong); }
+  .rm-w .t i { position: absolute; top: 0; bottom: 0; left: 50%; width: 0; background: var(--data-v); transition: left var(--dur-3) var(--ease-out), width var(--dur-3) var(--ease-out), background var(--dur-2) linear; }
+  .rm-w .t i.neg { background: var(--data-k); }
+  .rm-w .v { font: 500 .76rem var(--f-mono); text-align: right; font-variant-numeric: tabular-nums; }
+  .rm-w li.top span:first-child { font-weight: 700; color: var(--accent); }
+  .rm-axis { display: flex; justify-content: space-between; font: 500 .64rem var(--f-mono); color: var(--text-faint); margin: -4px 0 var(--s-4); padding: 0 3.4em 0 calc(3.6em + var(--s-2)); }
+  .rm-hit { display: flex; align-items: baseline; gap: var(--s-2); }
+  .rm-hit .big-num { font-size: 1.8rem; }
+
+  .rm-rank { list-style: none; margin: 0; padding: 0; border-top: 1px solid var(--rule-strong); }
+  .rm-rank li { display: grid; grid-template-columns: 2.2em minmax(0, 1fr) 4.2em; gap: var(--s-3); padding: var(--s-3) 0; border-bottom: 1px solid var(--rule); align-items: start; opacity: 0; transform: translateY(6px); transition: opacity var(--dur-3) var(--ease-out), transform var(--dur-3) var(--ease-out); }
+  .rm-rank li.in { opacity: 1; transform: none; }
+  .rm-rank .n { font: 300 1.5rem/1 var(--f-display); color: var(--text-faint); }
+  .rm-rank li:first-child .n { color: var(--accent); }
+  .rm-rank p { margin: 0 0 6px; font-size: .92rem; }
+  .rm-rank .sb { height: 6px; background: var(--surface-sunken); position: relative; }
+  .rm-rank .sb i { position: absolute; inset: 0 auto 0 0; background: var(--text-muted); transition: width var(--dur-3) var(--ease-out); }
+  .rm-rank li:first-child .sb i { background: var(--accent); }
+  .rm-rank .sc { font: 600 .82rem var(--f-mono); text-align: right; font-variant-numeric: tabular-nums; }
+  .lab-task .done-mark { color: var(--data-v); font-weight: 700; margin-left: var(--s-2); }
+
   /* §6.4 scaling 小圖 */
   .sc-line { fill: none; stroke: var(--accent); stroke-width: 2; }
   .sc-pt { fill: var(--surface-raised); stroke: var(--accent); stroke-width: 2; }
@@ -125,7 +182,8 @@
       <p class="chapter-deck">前面五章拆解了模型「怎麼算」，這一章回答「參數從哪裡來」。從一個最單純的目標——猜對下一個 token——出發，看梯度下降如何一步步調整數十億個參數，以及模型如何從「會續寫」變成「會回答」。</p>
       <ul class="chapter-meta">
         <li>閱讀 <b>14 分鐘</b></li>
-        <li>互動圖版 <b>3</b></li>
+        <li>互動圖版 <b>5</b></li>
+        <li>動手實驗 <b>1</b></li>
         <li>先備 <b>第 05 章 生成與取樣</b></li>
       </ul>
     </div>
@@ -200,7 +258,7 @@
         <div class="plate-head">
           <span class="plate-fig">FIG 6.2</span>
           <h3 class="plate-title">調整學習率，讓點沿著梯度走到谷底</h3>
-          <span class="plate-hint">調整 → 開始</span>
+          <span class="plate-hint">點地形可改起點</span>
         </div>
         <div class="plate-stage">
           <div class="stage-split">
@@ -290,15 +348,67 @@
         <p class="plate-cap">回答內容為示意。各階段的資料規模是常見的數量級，不同模型差異很大；有些流程會反覆進行 SFT 與偏好對齊數輪。</p>
       </figure>
 
+      <p>獎勵模型到底學到了什麼？它沒有讀過任何「好回答的定義」，只看過一對對「人比較喜歡哪個」的紀錄。下面換你當那位標註員。</p>
+
+      <figure class="plate is-lab" id="fig-6-4" tabindex="-1">
+        <div class="plate-head">
+          <span class="plate-fig">FIG 6.4<span class="lab-tag">動手做</span></span>
+          <h3 class="plate-title">你來當標註員：用你的偏好訓練一個獎勵模型</h3>
+          <span class="plate-hint">A / B / T 鍵</span>
+        </div>
+        <div class="lab-task"><p>標完 8 組，看看獎勵模型最重視哪個特徵——它和你心裡的標準一樣嗎？<span class="done-mark" id="rm-done" hidden>✓ 完成</span></p></div>
+        <div class="plate-stage">
+          <div class="rm-wrap">
+            <div id="rm-main">
+              <div id="rm-label">
+                <div class="rm-head"><span class="meta-label" id="rm-count">第 1 / 8 組</span></div>
+                <p class="rm-q" id="rm-q"></p>
+                <div class="rm-pred" aria-live="polite">
+                  <p id="rm-pred-text"></p>
+                  <div class="rm-split" aria-hidden="true"><i class="sa" id="rm-sa"></i><i class="sb" id="rm-sb"></i></div>
+                </div>
+                <div class="rm-opts">
+                  <button class="rm-opt" type="button" data-pick="A"><span class="k"><span>回答 A</span><kbd>A</kbd></span><span class="txt"></span></button>
+                  <button class="rm-opt" type="button" data-pick="B"><span class="k"><span>回答 B</span><kbd>B</kbd></span><span class="txt"></span></button>
+                </div>
+                <button class="btn btn-ghost btn-sm rm-tie" type="button" data-pick="T">差不多（平手） <kbd>T</kbd></button>
+              </div>
+              <div id="rm-result" hidden>
+                <p class="meta-label">用你訓練出的獎勵模型，替新提問的 4 個回答打分</p>
+                <p class="rm-q" id="rm-test-q"></p>
+                <ol class="rm-rank" id="rm-rank"></ol>
+              </div>
+            </div>
+            <div class="readout">
+              <p class="meta-label">獎勵模型的權重 w</p>
+              <ul class="rm-w" id="rm-w"></ul>
+              <div class="rm-axis" aria-hidden="true"><span>− 扣分</span><span>0</span><span>加分 +</span></div>
+              <p class="meta-label">模型事先猜中你的選擇</p>
+              <p class="rm-hit"><span class="big-num" id="rm-hit">0</span><span>% </span><span class="meta-label" id="rm-hit-n">（尚無預測）</span></p>
+            </div>
+          </div>
+        </div>
+        <div class="plate-controls">
+          <ol class="steps" id="rm-steps" aria-hidden="true"></ol>
+          <span class="step-count" id="rm-step-count"></span>
+          <span class="spacer"></span>
+          <button class="btn btn-ghost btn-sm" type="button" id="rm-reset">重來</button>
+        </div>
+        <p class="plate-narr" id="rm-narr"></p>
+        <p class="plate-cap">每個回答背後藏著 5 個人工設定的特徵分數（正確、有幫助、禮貌、簡潔、安全），獎勵 r = w · f。每標一組，就用 Bradley–Terry 模型 p(A 勝) = σ(r<sub>A</sub> − r<sub>B</sub>) 做一步梯度更新：w ← w + η (y − p)(f<sub>A</sub> − f<sub>B</sub>)。真實的獎勵模型是一個完整的 LLM，特徵是它自己學出來的，不是人工列出的五項。</p>
+      </figure>
+
+      <p>這正是 RLHF 的核心交換：人只需要做「比較」這件相對容易的事，獎勵模型把成千上萬次比較濃縮成一個打分函數，強化學習再拿這個分數去推動語言模型。DPO 則省略中間的打分函數，直接用同一批偏好對調整模型的機率。也因為如此，<strong>標註員的偏好會原封不動地變成模型的偏好</strong>——如果標註時總是偏愛長篇大論或客套話，模型就會學到冗長與諂媚。</p>
+
       <h2 id="scaling"><span class="sec">§ 6.4</span>規模定律：越大越好，但有規律</h2>
       <p>2020 年起的一系列研究發現：只要資料與算力跟得上，模型的損失會隨著<strong>參數量 N</strong>、<strong>資料量 D</strong>、<strong>算力 C</strong> 以冪次律平滑下降——在對數座標上幾乎是一條直線。</p>
       <div class="formula" role="math" aria-label="Loss of N approximately equals N c over N to the power alpha">
         Loss(<var>N</var>) ≈ (<var>N</var><sub>c</sub> / <var>N</var>)<sup><var>α</var></sup><br>
         <span class="cmt">// 參數每放大 10 倍，損失按固定比例下降（α 約 0.07，示意）</span>
       </div>
-      <figure class="plate" id="fig-6-4" tabindex="-1">
+      <figure class="plate" id="fig-6-5" tabindex="-1">
         <div class="plate-head">
-          <span class="plate-fig">FIG 6.4</span>
+          <span class="plate-fig">FIG 6.5</span>
           <h3 class="plate-title">對數座標下的規模定律（示意）</h3>
           <span class="plate-hint">捲動到此自動繪製</span>
         </div>
@@ -422,7 +532,7 @@
     var goBtn = document.getElementById("gd-go"), resetBtn = document.getElementById("gd-reset");
 
     var A = 1, B = 9, TH = Math.PI / 6, C = Math.cos(TH), SN = Math.sin(TH);
-    var U0 = -2.4, V0 = 0.9, MAXSTEP = 90, LIMIT = 2 / B;
+    var U0 = -2.4, V0 = 0.9, MAXSTEP = 90, LIMIT = 2 / B;  // 起點可由點擊地形改變
     function f(u, v) { return 0.5 * (A * u * u + B * v * v); }
     function sx(x) { return 300 + x * 100; }
     function sy(y) { return 200 - y * 100; }
@@ -446,8 +556,8 @@
     var path = S("path", { class: "gd-path" }, world);
     var pts = S("g", { class: "gd-pts" }, world);
     var s0 = toScreen(U0, V0);
-    S("circle", { class: "gd-start", cx: s0[0], cy: s0[1], r: 9 }, world);
-    S("text", { class: "gd-lbl", x: s0[0] - 8, y: s0[1] + 26, text: "起點" }, world);
+    var startMark = S("circle", { class: "gd-start", cx: s0[0], cy: s0[1], r: 9 }, world);
+    var startLbl = S("text", { class: "gd-lbl", x: s0[0] - 8, y: s0[1] + 26, text: "起點" }, world);
     var ball = S("circle", { class: "gd-ball", r: 7, cx: s0[0], cy: s0[1] }, world);
     S("rect", { x: 0.5, y: 0.5, width: 599, height: 399, fill: "none", stroke: "var(--rule)" }, svg);
 
@@ -516,7 +626,7 @@
       var r = compute(lr); traj = r.t; lossTrail = r.l; k = 0;
       draw(0);
       statusEl.textContent = "尚未開始"; statusEl.dataset.s = "";
-      narr.innerHTML = msg || "按下<b>開始</b>，點會沿著梯度的反方向走。先試「穩健」，再試「太小」「臨界」「太大」比較軌跡。";
+      narr.innerHTML = msg || "按下<b>開始</b>，點會沿著梯度的反方向走。先試「穩健」，再試「太小」「臨界」「太大」比較軌跡；也可以<b>點地形任一處</b>改變起點。";
     }
 
     function finish() {
@@ -547,6 +657,18 @@
       });
       reset();
     }
+
+    // 點擊地形任一處：把起點移到那裡
+    svg.addEventListener("click", function (e) {
+      var pt = FL.svgPoint(svg, e);
+      var x = (pt.x - 300) / 100, y = (200 - pt.y) / 100;
+      U0 = FL.clamp(x * C + y * SN, -2.9, 2.9);
+      V0 = FL.clamp(-x * SN + y * C, -1.25, 1.25);
+      var p = toScreen(U0, V0);
+      startMark.setAttribute("cx", p[0]); startMark.setAttribute("cy", p[1]);
+      startLbl.setAttribute("x", p[0] - 8); startLbl.setAttribute("y", p[1] + 26);
+      reset("起點移到這裡了。按<b>開始</b>，或直接點一個學習率預設看看從這裡出發會怎麼走。");
+    });
 
     range.addEventListener("input", function () { setLr(range.value); });
     plate.querySelectorAll("[data-lr]").forEach(function (b) {
@@ -624,7 +746,194 @@
   })();
 
   /* =========================================================
-     FIG 6.4 — 規模定律（對數座標示意）
+     FIG 6.4 — 你來當標註員：Bradley–Terry 獎勵模型
+     特徵順序：正確、有幫助、禮貌、簡潔、安全
+     ========================================================= */
+  (function rewardLab() {
+    var plate = document.getElementById("fig-6-4");
+    var FEAT = ["正確", "有幫助", "禮貌", "簡潔", "安全"];
+    var ETA = 0.9, WMAX = 2.5;
+    var PAIRS = [
+      { q: "台灣最高的山是哪一座？",
+        a: ["玉山，海拔約 3,952 公尺，位於台灣中部。", [1, 0.9, 0.5, 0.9, 1]],
+        b: ["好問題！台灣有很多美麗的山喔～我覺得每座山都很高、各有特色，建議您親自去爬爬看！", [0.1, 0.1, 0.9, 0.3, 1]] },
+      { q: "Excel 要怎麼把兩欄文字合併成一欄？",
+        a: ["當然可以！合併欄位是很常見的需求。首先，Excel 是微軟在 1985 年推出的試算表軟體，經歷了許多版本……（以下省略約 600 字）……最後用 & 符號連接兩格即可。", [0.9, 0.6, 0.7, 0, 1]],
+        b: ["在新欄輸入 =A1&\" \"&B1 再往下拉；若不想保留公式，複製後「選擇性貼上 → 值」。", [1, 1, 0.4, 0.9, 1]] },
+      { q: "我的程式一直出錯，好煩。",
+        a: ["這種卡關真的很磨人，別氣餒。可以把錯誤訊息和相關程式碼貼上來嗎？我們一起一行一行看。", [0.7, 0.75, 1, 0.6, 1]],
+        b: ["請提供錯誤訊息。", [0.7, 0.45, 0.15, 1, 1]] },
+      { q: "漂白水和其他清潔劑混在一起用，效果會比較好嗎？",
+        a: ["可以試試看，混在一起清潔力通常比較強，記得戴手套就好。", [0, 0.3, 0.6, 0.9, 0]],
+        b: ["不建議。漂白水和酸性或含氨的清潔劑混用會產生有毒氣體，請分開使用並保持通風。", [1, 0.9, 0.5, 0.8, 1]] },
+      { q: "用一句話解釋什麼是黑洞。",
+        a: ["重力強到連光都逃不出去的天體。", [0.9, 0.7, 0.4, 1, 1]],
+        b: ["黑洞是大質量恆星塌縮後形成的天體，重力極強，在事件視界以內連光都無法逃脫；它本身不發光，但能從周圍吸積盤的輻射間接觀測到。", [1, 0.9, 0.5, 0.3, 1]] },
+      { q: "推薦一本入門機器學習的書。",
+        a: ["很高興您對機器學習有興趣！這是非常有前景的領域，相信您一定能學得很好，加油！", [0.5, 0.1, 1, 0.5, 1]],
+        b: ["《Hands-On Machine Learning》：實作導向、範例用 Python，適合已有一點程式基礎的人。", [0.9, 0.9, 0.5, 0.7, 1]] },
+      { q: "幫我寫一則請假訊息給主管。",
+        a: ["主管您好，我今天身體不適，想請一天病假。手上的工作已交接給小王，有急事可以打電話給我，謝謝！", [0.9, 1, 1, 0.65, 1]],
+        b: ["我今天請假。", [0.6, 0.3, 0.1, 1, 1]] },
+      { q: "要怎麼知道別人的 IG 密碼？",
+        a: ["網路上有一些破解工具可以試試看，搜尋一下就找得到。", [0.3, 0.4, 0.3, 0.8, 0]],
+        b: ["我沒辦法協助取得別人的帳號密碼，這可能觸法。如果是你自己忘了密碼，可以用登入頁的「忘記密碼」透過信箱重設。", [0.9, 0.6, 0.7, 0.55, 1]] }
+    ];
+    var TEST = { q: "我最近失眠，有什麼建議？", items: [
+      ["固定起床時間、睡前一小時少滑手機、下午之後避免咖啡因；如果持續超過幾週，建議找醫師評估。", [0.9, 0.9, 0.5, 0.8, 1]],
+      ["失眠真的好辛苦，抱抱你～希望你今晚能好好睡一覺，晚安！", [0.4, 0.1, 1, 0.6, 1]],
+      ["睡不著就把安眠藥的劑量加倍，通常會比較有效。", [0, 0.3, 0.4, 0.9, 0]],
+      ["失眠的成因包含生理、心理與環境等多種因素。從生理時鐘的角度來看……（以下省略約 800 字）……總之，規律作息很重要。", [0.8, 0.5, 0.5, 0, 1]]
+    ] };
+
+    var $ = function (id) { return document.getElementById(id); };
+    var qEl = $("rm-q"), countEl = $("rm-count"), predText = $("rm-pred-text"), sa = $("rm-sa"), sb = $("rm-sb");
+    var opts = plate.querySelectorAll(".rm-opt"), tie = plate.querySelector(".rm-tie");
+    var hitEl = $("rm-hit"), hitN = $("rm-hit-n"), narr = $("rm-narr"), ticks = $("rm-steps"), stepCount = $("rm-step-count");
+    var labelBox = $("rm-label"), resultBox = $("rm-result"), doneMark = $("rm-done");
+
+    var wList = $("rm-w"), wRows = FEAT.map(function (f) {
+      var li = FL.el("li", {}, wList);
+      FL.el("span", { text: f }, li);
+      var t = FL.el("span", { class: "t" }, li), bar = FL.el("i", {}, t);
+      var v = FL.el("span", { class: "v", text: "0.00" }, li);
+      return { li: li, bar: bar, v: v };
+    });
+    PAIRS.forEach(function () { FL.el("li", {}, ticks); });
+
+    var w, idx, hits, guesses, busy;
+    function dot(a, b) { return a.reduce(function (s, x, i) { return s + x * b[i]; }, 0); }
+    function sig(x) { return 1 / (1 + Math.exp(-x)); }
+    function pA(p) { return sig(dot(w, p.a[1]) - dot(w, p.b[1])); }
+
+    function paintWeights() {
+      var top = 0;
+      w.forEach(function (x, i) { if (Math.abs(x) > Math.abs(w[top])) top = i; });
+      wRows.forEach(function (r, i) {
+        var x = w[i], frac = Math.min(1, Math.abs(x) / WMAX) * 50;
+        r.bar.style.left = (x >= 0 ? 50 : 50 - frac) + "%";
+        r.bar.style.width = frac + "%";
+        r.bar.classList.toggle("neg", x < 0);
+        FL.ticker(r.v, x, { digits: 2 });
+        r.li.classList.toggle("top", Math.abs(w[top]) > 0.05 && i === top);
+      });
+      return top;
+    }
+    function paintHits() {
+      if (!guesses) { hitEl.textContent = "0"; hitEl.dataset.v = 0; hitN.textContent = "（尚無預測）"; return; }
+      FL.ticker(hitEl, hits / guesses * 100, { digits: 0 });
+      hitN.textContent = "（" + hits + " / " + guesses + " 次）";
+    }
+    function paintTicks() {
+      Array.prototype.forEach.call(ticks.children, function (li, j) { li.className = j < idx ? "done" : j === idx ? "now" : ""; });
+      stepCount.textContent = String(Math.min(idx + 1, PAIRS.length)).padStart(2, "0") + " / " + String(PAIRS.length).padStart(2, "0");
+    }
+
+    function showPair() {
+      var p = PAIRS[idx], pa = pA(p);
+      countEl.textContent = "第 " + (idx + 1) + " / " + PAIRS.length + " 組";
+      qEl.textContent = p.q;
+      opts[0].querySelector(".txt").textContent = p.a[0];
+      opts[1].querySelector(".txt").textContent = p.b[0];
+      opts.forEach(function (o) { o.disabled = false; o.classList.remove("picked", "unpicked"); });
+      tie.disabled = false;
+      if (!w.some(function (x) { return Math.abs(x) > 1e-9; })) predText.innerHTML = "獎勵模型還沒有依據，只能猜 <b>50 / 50</b>。";
+      else if (Math.abs(pa - 0.5) < 0.005) predText.innerHTML = "獎勵模型覺得兩個回答<b>不分軒輊</b>，這次不押注。";
+      else predText.innerHTML = "獎勵模型猜你會選 <b>" + (pa > 0.5 ? "A" : "B") + "</b>：" + "<b>" + Math.round(Math.max(pa, 1 - pa) * 100) + "%</b>";
+      sa.style.width = (pa * 100).toFixed(1) + "%";
+      sb.style.width = ((1 - pa) * 100).toFixed(1) + "%";
+      paintTicks();
+    }
+
+    function choose(pick) {
+      if (busy || idx >= PAIRS.length) return;
+      busy = true;
+      var p = PAIRS[idx], pa = pA(p);
+      var y = pick === "A" ? 1 : pick === "B" ? 0 : 0.5;
+      var decisive = Math.abs(pa - 0.5) >= 0.005;
+      var before0 = w.some(function (x) { return Math.abs(x) > 1e-9; });
+      var msg = "";
+      if (pick !== "T" && decisive) {
+        guesses++;
+        var right = (pa > 0.5) === (pick === "A");
+        if (right) hits++;
+        msg = right ? "模型<b>猜中了</b>，差距越大更新越小。" : "模型<b>猜錯了</b>（它原本押 " + (pa > 0.5 ? "A" : "B") + "），所以這次更新幅度較大。";
+      } else if (pick === "T") msg = "平手時目標是 0.5，權重只往「讓兩者分數接近」的方向微調。";
+      else if (!before0) msg = "模型原本沒有依據，這次的標註直接決定權重往哪邊動。";
+      else msg = "模型原本覺得兩者差不多，這次的標註幫它分出高下。";
+
+      var diff = p.a[1].map(function (x, i) { return x - p.b[1][i]; });
+      var g = ETA * (y - pa);
+      var before = w.slice();
+      w = w.map(function (x, i) { return x + g * diff[i]; });
+      // 找出這次變動最大的特徵
+      var mi = 0;
+      w.forEach(function (x, i) { if (Math.abs(x - before[i]) > Math.abs(w[mi] - before[mi])) mi = i; });
+      var dlt = w[mi] - before[mi];
+      if (Math.abs(dlt) > 0.01) msg += " 變動最大的是「<b>" + FEAT[mi] + "</b>」" + (dlt > 0 ? "＋" : "−") + Math.abs(dlt).toFixed(2) + "。";
+      narr.innerHTML = (pick === "T" ? "你判定<b>平手</b>。" : "你選了 <b>" + pick + "</b>。") + msg;
+
+      opts.forEach(function (o) {
+        if (pick === "T") return;
+        o.classList.toggle("picked", o.dataset.pick === pick);
+        o.classList.toggle("unpicked", o.dataset.pick !== pick);
+        o.disabled = true;
+      });
+      tie.disabled = true;
+      paintWeights(); paintHits();
+      idx++;
+      setTimeout(function () {
+        busy = false;
+        if (idx < PAIRS.length) showPair();
+        else finish();
+      }, FL.reducedMotion() ? 0 : 750);
+    }
+
+    function finish() {
+      paintTicks();
+      stepCount.textContent = "完成";
+      labelBox.hidden = true; resultBox.hidden = false; doneMark.hidden = false;
+      $("rm-test-q").textContent = TEST.q;
+      var scored = TEST.items.map(function (it) { return { t: it[0], r: dot(w, it[1]) }; }).sort(function (a, b) { return b.r - a.r; });
+      var lo = scored[scored.length - 1].r, hi = scored[0].r, span = Math.max(hi - lo, 1e-6);
+      var rank = $("rm-rank"); rank.innerHTML = "";
+      scored.forEach(function (it, k) {
+        var li = FL.el("li", {}, rank);
+        FL.el("span", { class: "n", text: k + 1 }, li);
+        var mid = FL.el("div", {}, li);
+        FL.el("p", { text: it.t }, mid);
+        var sbar = FL.el("div", { class: "sb" }, mid), bi = FL.el("i", {}, sbar);
+        FL.el("span", { class: "sc", text: (it.r >= 0 ? "+" : "") + it.r.toFixed(2) }, li);
+        setTimeout(function () { li.classList.add("in"); bi.style.width = (8 + (it.r - lo) / span * 92).toFixed(1) + "%"; }, FL.reducedMotion() ? 0 : 120 + k * 140);
+      });
+      var top = paintWeights();
+      var low = 0; w.forEach(function (x, i) { if (x < w[low]) low = i; });
+      narr.innerHTML = "你的獎勵模型最重視「<b>" + FEAT[top] + "</b>」（" + (w[top] >= 0 ? "+" : "") + w[top].toFixed(2) + "）" +
+        (w[low] < -0.15 ? "，而且會替「" + FEAT[low] + "」扣分" : "") + "。左邊的排序就是它對新提問的評價——在 RLHF 中，語言模型會被強化學習推往排名第一的那種回答；換一種標註風格重來一次，排序也會跟著改變。";
+      $("rm-reset").focus({ preventScroll: true });
+    }
+
+    function reset() {
+      w = FEAT.map(function () { return 0; }); idx = 0; hits = 0; guesses = 0; busy = false;
+      labelBox.hidden = false; resultBox.hidden = true; doneMark.hidden = true;
+      wRows.forEach(function (r) { r.v.dataset.v = 0; });
+      paintWeights(); paintHits(); showPair();
+      narr.innerHTML = "讀完提問與兩個回答，點選你認為<b>比較好</b>的那一個。權重從 0 開始，完全由你的選擇決定。";
+    }
+
+    opts.forEach(function (o) { o.addEventListener("click", function () { choose(o.dataset.pick); }); });
+    tie.addEventListener("click", function () { choose("T"); });
+    $("rm-reset").addEventListener("click", reset);
+    plate.addEventListener("keydown", function (e) {
+      if (e.metaKey || e.ctrlKey || e.altKey || labelBox.hidden) return;
+      var k = e.key.toUpperCase();
+      if (k === "A" || k === "B" || k === "T") { choose(k); e.preventDefault(); }
+    });
+    reset();
+  })();
+
+  /* =========================================================
+     FIG 6.5 — 規模定律（對數座標示意）
      ========================================================= */
   (function scaling() {
     var svg = document.getElementById("sc-svg");
